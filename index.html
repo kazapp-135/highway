@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KAZ-HIGHWAY</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <style>
+        /* ⚙️ フォント読込: 英字 Orbitron / 日本語 IBM Plex Sans JP */
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;700&family=Orbitron:wght@500;800;900&display=swap');
+
+        /* 🎨 漆黒×NEXCOグリーンの極限UIパレット */
+        :root {
+            --bg-color: #080a08;         /* 限りなく黒に近い深緑 */
+            --panel-bg: #121612;         /* パネル用のダークグレーグリーン */
+            
+            --nexco-green: #00A34F;      /* 基準標識のグリーン */
+            --nexco-light: #1dd372;      /* 発光ハイライト */
+            --nexco-dark: #006b33;       /* 沈み込みアクティブ */
+            --nexco-muted: #0d2918;      /* サブボタン背景 */
+            
+            --text-main: #E8EFE8;        /* 目に優しいオフホワイト */
+            --text-sub: #7A857A;         /* 非アクティブ文字 */
+            --alert-red: #E63946;        /* 警戒アラートの赤 */
+        }
+        
+        body { 
+            background-color: var(--bg-color); 
+            color: var(--text-main); 
+            font-family: 'Orbitron', 'IBM Plex Sans JP', sans-serif; 
+            margin: 0; 
+            padding-bottom: 80px; 
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        /* ヘッダー：重厚なグラデーションと発光ライン */
+        header { 
+            background: linear-gradient(135deg, var(--nexco-dark), var(--nexco-green));
+            text-align: center; 
+            padding: 16px 0; 
+            font-size: 20px; 
+            font-weight: 900; 
+            letter-spacing: 3px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.8);
+            border-bottom: 1px solid var(--nexco-light);
+        }
+        
+        .container { padding: 16px; max-width: 600px; margin: 0 auto; }
+        
+        /* モード切替タブ（濃淡コントロール） */
+        .mode-switch { display: flex; gap: 8px; margin-bottom: 24px; }
+        .mode-btn { 
+            flex: 1; 
+            padding: 14px; 
+            background: var(--panel-bg); 
+            color: var(--text-sub); 
+            border: 1px solid #2a332a; 
+            border-radius: 8px; 
+            font-size: 14px;
+            font-weight: bold; 
+            font-family: 'IBM Plex Sans JP', sans-serif;
+            cursor: pointer; 
+            transition: all 0.2s ease;
+        }
+        .mode-btn.active { 
+            background: var(--nexco-muted); 
+            color: var(--nexco-light); 
+            border-color: var(--nexco-green); 
+            box-shadow: inset 0 0 10px rgba(0, 163, 79, 0.2);
+        }
+        
+        /* 🚀 巨大GPS特定ボタン：立体クリック表現 */
+        #gps-btn { 
+            width: 100%; 
+            padding: 20px; 
+            background: linear-gradient(180deg, var(--nexco-light), var(--nexco-green)); 
+            color: #002210; 
+            font-size: 18px; 
+            font-weight: 900; 
+            letter-spacing: 1px;
+            border: none; 
+            border-radius: 12px; 
+            margin-bottom: 20px; 
+            cursor: pointer; 
+            box-shadow: 0 6px 0 var(--nexco-dark), 0 10px 20px rgba(0, 163, 79, 0.3);
+            transition: all 0.1s;
+        }
+        #gps-btn:active {
+            transform: translateY(6px);
+            box-shadow: 0 0 0 var(--nexco-dark), 0 0 0 rgba(0, 163, 79, 0);
+        }
+        #gps-btn:disabled {
+            background: var(--panel-bg);
+            color: var(--text-sub);
+            box-shadow: 0 6px 0 #000;
+        }
+
+        /* 電車路線図風タイムライン */
+        .timeline { 
+            border-left: 3px solid var(--nexco-dark); 
+            margin-left: 16px; 
+            padding-left: 24px; 
+            padding-top: 10px;
+        }
+        .sapa-card { 
+            background: var(--panel-bg); 
+            padding: 16px; 
+            border-radius: 10px; 
+            margin-bottom: 16px; 
+            position: relative; 
+            border: 1px solid #1f261f;
+        }
+        /* 路線ドットの発光意匠 */
+        .sapa-card::before { 
+            content: ''; 
+            position: absolute; 
+            left: -32px; 
+            top: 20px; 
+            width: 12px; 
+            height: 12px; 
+            background: var(--bg-color); 
+            border: 3px solid var(--nexco-light); 
+            border-radius: 50%; 
+            box-shadow: 0 0 8px var(--nexco-light);
+        }
+        
+        .sapa-name { font-size: 22px; font-weight: 900; margin-bottom: 6px; color: #FFF; }
+        .sapa-icons { font-size: 20px; margin-top: 10px; display: flex; gap: 12px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
+        
+        /* 警告アラート：シャープな赤 */
+        .memo-alert { 
+            color: var(--alert-red); 
+            font-size: 13px; 
+            margin-top: 10px; 
+            font-weight: bold; 
+            font-family: 'IBM Plex Sans JP', sans-serif;
+            background: rgba(230, 57, 70, 0.08);
+            padding: 8px 12px;
+            border-left: 3px solid var(--alert-red);
+            border-radius: 4px;
+        }
+
+        /* ✏️ 修正依頼ボタン（控えめに同化） */
+        .edit-btn { 
+            position: absolute; 
+            right: 12px; 
+            top: 16px; 
+            background: var(--nexco-muted); 
+            border: 1px solid var(--nexco-dark); 
+            color: var(--nexco-light); 
+            padding: 6px 12px; 
+            border-radius: 6px; 
+            font-size: 12px; 
+            font-weight: bold;
+            font-family: 'IBM Plex Sans JP', sans-serif;
+            cursor: pointer; 
+        }
+        
+        #status-display { 
+            text-align: center; 
+            color: var(--nexco-light); 
+            margin-bottom: 20px; 
+            font-size: 14px; 
+            font-weight: bold;
+            letter-spacing: 1.5px;
+        }
+
+        #route-select {
+            width: 100%; 
+            padding: 14px; 
+            font-size: 16px; 
+            font-weight: bold;
+            margin-bottom: 20px; 
+            background: var(--panel-bg); 
+            color: var(--nexco-light); 
+            border: 1px solid var(--nexco-dark);
+            border-radius: 8px;
+            font-family: 'IBM Plex Sans JP', sans-serif;
+            outline: none;
+        }
+    </style>
+</head>
+<body>
+
+    <header>KAZ-HIGHWAY</header>
+
+    <div class="container">
+        <div class="mode-switch">
+            <button class="mode-btn active" id="mode-drive" onclick="switchMode('drive')">助手席モード</button>
+            <button class="mode-btn" id="mode-db" onclick="switchMode('db')">路線図検索</button>
+        </div>
+
+        <div id="drive-view">
+            <button id="gps-btn" onclick="startGPSAnalysis()">SCANNING LIVE ROUTE</button>
+            <div id="status-display">GPS STANDBY.</div>
+            <div class="timeline" id="timeline-container"></div>
+        </div>
+
+        <div id="db-view" style="display: none;">
+            <select id="route-select">
+                <option value="">▼ 路線図を選択</option>
+            </select>
+            <div class="timeline" id="db-timeline-container"></div>
+        </div>
+    </div>
+
+<script>
+// ========================================================
+// ⚙️ バックエンド接続先
+// ========================================================
+const API_BASE_URL = "https://your-cloudflare-tunnel-url.trycloudflare.com"; 
+
+let facilitiesDB = [];
+
+// 起動時にデータ一括ダウンロード
+window.onload = async () => {
+    document.getElementById('status-display').innerText = "SYSTEM BOOTING...";
+    try {
+        const facRes = await fetch(`${API_BASE_URL}/api/facilities`);
+        const facText = await facRes.text();
+        Papa.parse(facText, { header: true, skipEmptyLines: true, complete: (res) => { facilitiesDB = res.data; } });
+        document.getElementById('status-display').innerText = "DATABASE ONLINE.";
+        populateRouteSelect();
+    } catch (e) {
+        document.getElementById('status-display').innerText = "LINK CRITICAL ERROR.";
+        document.getElementById('status-display').style.color = "var(--alert-red)";
+    }
+};
+
+// 📍 GPS 3点計測ベクトルのモック
+async function startGPSAnalysis() {
+    const status = document.getElementById('status-display');
+    const btn = document.getElementById('gps-btn');
+    document.getElementById('timeline-container').innerHTML = "";
+    
+    btn.disabled = true;
+    
+    for (let i = 1; i <= 3; i++) {
+        status.innerText = `[${i}/3] TRACKING SATELLITE...`;
+        await new Promise(r => setTimeout(r, 1000)); 
+    }
+    status.innerText = "TARGET ACQUIRED.";
+    btn.disabled = false;
+    btn.innerText = "POSITION RE-SCAN";
+    
+    renderTimeline("関越自動車道", "timeline-container");
+}
+
+// 🎨 電光掲示板風タイムラインレンダリング
+function renderTimeline(routeName, containerId) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = `<div style="color:var(--nexco-light); font-size:14px; font-weight:bold; margin-bottom:16px; letter-spacing:1px;">ROUTE: ${routeName}</div>`;
+    
+    const routeFacilities = facilitiesDB.filter(f => f.highway === routeName);
+    routeFacilities.forEach(f => {
+        let icons = "";
+        if(f.gas_24h == "1") icons += "⛽ ";
+        if(f.restaurant == "1") icons += "🍽️ ";
+        if(f.conveni == "1") icons += "🏪 ";
+        if(f.shower == "1" || String(f.memo).includes("入浴")) icons += "🚿 ";
+
+        let memoHtml = f.memo ? `<div class="memo-alert">⚠️ ${f.memo}</div>` : "";
+
+        container.innerHTML += `
+            <div class="sapa-card">
+                <div class="sapa-name">${f.name}</div>
+                <div class="sapa-icons">${icons}</div>
+                ${memoHtml}
+                <button class="edit-btn" onclick="requestEdit('${f.highway}', '${f.name}')">修正依頼</button>
+            </div>
+        `;
+    });
+}
+
+// 📤 修正依頼をラズパイサーバーへPOST
+async function requestEdit(highway, name) {
+    const memo = prompt(`【${name}】のデータ修正提案を入力してください\n(例: ガソリンスタンドが夜間閉店します)`);
+    if (!memo) return;
+    try {
+        await fetch(`${API_BASE_URL}/api/correction`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ highway, name, memo })
+        });
+        alert("TRANSMISSION SUCCESS: 修正データを保留領域に記録しました。");
+    } catch (e) { alert("ERROR: ラズパイへの送信に失敗しました。"); }
+}
+
+function switchMode(mode) {
+    document.getElementById('mode-drive').classList.toggle('active', mode === 'drive');
+    document.getElementById('mode-db').classList.toggle('active', mode === 'db');
+    document.getElementById('drive-view').style.display = mode === 'drive' ? 'block' : 'none';
+    document.getElementById('db-view').style.display = mode === 'db' ? 'block' : 'none';
+}
+
+function populateRouteSelect() {
+    const select = document.getElementById('route-select');
+    [...new Set(facilitiesDB.map(f => f.highway))].filter(Boolean).forEach(r => {
+        select.innerHTML += `<option value="${r}">${r}</option>`;
+    });
+    select.addEventListener('change', (e) => { if(e.target.value) renderTimeline(e.target.value, "db-timeline-container"); });
+}
+</script>
+</body>
+</html>
