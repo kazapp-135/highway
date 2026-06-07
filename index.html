@@ -7,24 +7,89 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;800;900&display=swap');
-        :root { --bg-color: #080a08; --panel-bg: #121612; --nexco-green: #00A34F; --nexco-light: #1dd372; --nexco-dark: #006b33; --text-main: #E8EFE8; --text-sub: #7A857A; --dev-red: #ff3333; }
-        body { background-color: var(--bg-color); color: var(--text-main); font-family: 'Orbitron', sans-serif; margin: 0; padding-bottom: 80px; }
-        header { background: linear-gradient(135deg, var(--nexco-dark), var(--nexco-green)); text-align: center; padding: 20px; font-weight: 900; letter-spacing: 3px; cursor: pointer; }
-        .container { padding: 16px; max-width: 600px; margin: 0 auto; }
-        .mode-switch { display: flex; gap: 8px; margin-bottom: 24px; }
-        .mode-btn { flex: 1; padding: 14px; background: var(--panel-bg); color: var(--text-sub); border: 1px solid #2a332a; border-radius: 8px; font-weight: bold; }
+        
+        :root { 
+            --bg-color: #080a08; 
+            --panel-bg: #121612; 
+            --nexco-green: #00A34F; 
+            --nexco-light: #1dd372; 
+            --nexco-dark: #006b33; 
+            --text-main: #E8EFE8; 
+            --text-sub: #7A857A; 
+            --alert-red: #E63946; 
+        }
+        
+        body { 
+            background-color: var(--bg-color); 
+            color: var(--text-main); 
+            font-family: 'Orbitron', sans-serif; 
+            margin: 0; 
+            padding-bottom: 80px; 
+        }
+        
+        header { 
+            background: linear-gradient(135deg, var(--nexco-dark), var(--nexco-green)); 
+            text-align: center; 
+            padding: 20px; 
+            font-size: 22px; 
+            font-weight: 900; 
+            letter-spacing: 3px; 
+            cursor: pointer; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        
+        .container { padding: 20px; max-width: 600px; margin: 0 auto; }
+        
+        .mode-switch { display: flex; gap: 10px; margin-bottom: 24px; }
+        .mode-btn { 
+            flex: 1; padding: 15px; background: var(--panel-bg); color: var(--text-sub); 
+            border: 1px solid #2a332a; border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer;
+        }
         .mode-btn.active { background: #0d2918; color: var(--nexco-light); border-color: var(--nexco-green); }
-        #gps-btn { width: 100%; padding: 20px; background: linear-gradient(180deg, var(--nexco-light), var(--nexco-green)); color: #002210; font-size: 18px; font-weight: 900; border: none; border-radius: 12px; margin-bottom: 20px; }
-        .sapa-card { background: var(--panel-bg); padding: 16px; border-radius: 10px; margin-bottom: 12px; border: 1px solid #1f261f; display: flex; justify-content: space-between; align-items: center; }
-        #test-panel { display: none; background: #2a0000; border: 1px solid var(--dev-red); padding: 12px; margin-bottom: 20px; color: #ff9999; }
-        select { width: 100%; padding: 12px; background: var(--panel-bg); color: white; border: 1px solid var(--nexco-green); border-radius: 8px; }
+        
+        #gps-btn { 
+            width: 100%; padding: 20px; 
+            background: linear-gradient(180deg, var(--nexco-light), var(--nexco-green)); 
+            color: #002210; font-size: 18px; font-weight: 900; 
+            border: none; border-radius: 12px; margin-bottom: 20px; cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 163, 79, 0.3);
+        }
+        #gps-btn:active { transform: scale(0.98); }
+        
+        .sapa-card { 
+            background: var(--panel-bg); padding: 18px; border-radius: 10px; 
+            margin-bottom: 14px; border: 1px solid #1f261f; 
+            display: flex; justify-content: space-between; align-items: center; 
+        }
+        .sapa-name { font-size: 18px; font-weight: bold; }
+        .icons { font-size: 18px; letter-spacing: 4px; }
+        
+        #status-display { 
+            text-align: center; color: var(--nexco-light); 
+            margin-bottom: 20px; font-size: 14px; font-weight: bold; 
+            min-height: 20px;
+        }
+        
+        #test-panel { 
+            display: none; background: #2a0000; border: 1px solid var(--alert-red); 
+            padding: 15px; margin-bottom: 20px; color: #ff9999; border-radius: 8px; font-size: 12px;
+        }
+        #test-panel input { width: 80px; background: black; color: white; border: 1px solid red; margin: 0 5px; }
+        
+        select { 
+            width: 100%; padding: 15px; background: var(--panel-bg); 
+            color: white; border: 1px solid var(--nexco-green); border-radius: 8px; font-size: 16px;
+        }
     </style>
 </head>
 <body>
     <header onclick="toggleDebug()">KAZ-HIGHWAY</header>
+    
     <div class="container">
         <div id="test-panel">
-            [DEBUG MODE] Lat:<input type="number" id="test-lat" value="35.455"> Lon:<input type="number" id="test-lon" value="139.393">
+            <b>[DEBUG MODE] 仮想GPS入力</b><br><br>
+            Lat: <input type="number" id="test-lat" value="35.4552">
+            Lon: <input type="number" id="test-lon" value="139.3939">
         </div>
 
         <div class="mode-switch">
@@ -33,7 +98,7 @@
         </div>
 
         <div id="drive-view">
-            <button id="gps-btn" onclick="startLocalAnalysis()">SCANNING LIVE</button>
+            <button id="gps-btn" onclick="startAnalysis()">SCANNING LIVE ROUTE</button>
             <div id="status-display">DB LOADING...</div>
             <div id="timeline-container"></div>
         </div>
@@ -45,65 +110,143 @@
     </div>
 
 <script>
-    let joints = [], facilities = [], clickCount = 0;
+    let joints = [];
+    let facilities = [];
+    let clickCount = 0;
 
+    // 1. データ読み込み処理
     window.onload = async () => {
         try {
             const jRes = await fetch('./data/highway_joints.csv');
             joints = Papa.parse(await jRes.text(), {header:true, skipEmptyLines:true}).data;
+            
             const fRes = await fetch('./data/highway_facilities_db.csv');
             facilities = Papa.parse(await fRes.text(), {header:true, skipEmptyLines:true}).data;
             
-            // 路線図セレクトボックスを生成
-            const routes = [...new Set(facilities.map(f => f.highway.trim()))].filter(Boolean);
+            // 路線図プルダウンの生成
+            const routes = [...new Set(facilities.map(f => f.highway ? f.highway.trim() : ""))].filter(Boolean);
             const select = document.getElementById('route-select');
             routes.forEach(r => select.innerHTML += `<option value="${r}">${r}</option>`);
-            document.getElementById('status-display').innerText = "DB ONLINE.";
-        } catch(e) { document.getElementById('status-display').innerText = "DB LOAD ERROR"; }
+            
+            document.getElementById('status-display').innerText = "SYSTEM ONLINE. READY.";
+        } catch(e) { 
+            document.getElementById('status-display').innerText = "DB LOAD ERROR: " + e.message; 
+            document.getElementById('status-display').style.color = "var(--alert-red)";
+        }
     };
 
-    function toggleDebug() { if(++clickCount >= 5) document.getElementById('test-panel').style.display = 'block'; }
-
-    function startLocalAnalysis() {
-        const lat = document.getElementById('test-panel').style.display === 'block' ? parseFloat(document.getElementById('test-lat').value) : null;
-        const lon = document.getElementById('test-panel').style.display === 'block' ? parseFloat(document.getElementById('test-lon').value) : null;
-        
-        if(lat) { performAnalysis(lat, lon); return; }
-        navigator.geolocation.getCurrentPosition(pos => performAnalysis(pos.coords.latitude, pos.coords.longitude));
+    // 2. UI表示切替処理
+    function switchMode(mode) {
+        document.getElementById('drive-view').style.display = mode === 'drive' ? 'block' : 'none';
+        document.getElementById('db-view').style.display = mode === 'db' ? 'block' : 'none';
+        document.getElementById('mode-drive').classList.toggle('active', mode === 'drive');
+        document.getElementById('mode-db').classList.toggle('active', mode === 'db');
     }
 
-    function performAnalysis(lat, lon) {
-        let nearest = null, minDist = 9999;
+    // 3. テストモード起動処理
+    function toggleDebug() { 
+        if(++clickCount >= 5) document.getElementById('test-panel').style.display = 'block'; 
+    }
+
+    // 4. 解析開始（GPS or テスト）
+    function startAnalysis() {
+        const status = document.getElementById('status-display');
+        
+        // テストモード起動中の場合
+        if(document.getElementById('test-panel').style.display === 'block') {
+            const lat = parseFloat(document.getElementById('test-lat').value);
+            const lon = parseFloat(document.getElementById('test-lon').value);
+            status.innerText = "TEST MODE SENSOR ACTIVE...";
+            calculateNearest(lat, lon);
+            return;
+        }
+
+        // スマホのGPS利用
+        status.innerText = "AQUIRING GPS SIGNAL...";
+        if (!navigator.geolocation) {
+            status.innerText = "ERROR: ブラウザが位置情報に非対応です";
+            status.style.color = "var(--alert-red)";
+            return;
+        }
+
+        // GPS取得（エラー処理を厳密に設定）
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                calculateNearest(pos.coords.latitude, pos.coords.longitude);
+            },
+            (err) => {
+                status.style.color = "var(--alert-red)";
+                if (err.code === 1) status.innerText = "ERROR: 位置情報が「拒否」されています。スマホの設定を確認してください。";
+                else if (err.code === 2) status.innerText = "ERROR: 電波が取得できません。外に出てください。";
+                else if (err.code === 3) status.innerText = "ERROR: タイムアウトしました。";
+                else status.innerText = "ERROR: " + err.message;
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    }
+
+    // 5. 最寄り路線の計算（数学的計算）
+    function calculateNearest(lat, lon) {
+        let nearest = null;
+        let minDist = 9999;
+        
         joints.forEach(j => {
-            const dist = Math.hypot(parseFloat(j.lat) - lat, parseFloat(j.lon) - lon);
-            if(dist < minDist) { minDist = dist; nearest = j; }
+            if (!j.lat || !j.lon) return;
+            // 簡易的な距離計算（約111km/度）
+            const dLat = parseFloat(j.lat) - lat;
+            const dLon = parseFloat(j.lon) - lon;
+            const dist = Math.sqrt(dLat*dLat + dLon*dLon) * 111.0; 
+            
+            if(dist < minDist) { 
+                minDist = dist; 
+                nearest = j; 
+            }
         });
 
-        if(nearest && minDist < 0.1) {
-            document.getElementById('status-display').innerText = `LOCKED: ${nearest.highway}`;
-            renderTimeline(nearest.highway.trim(), "timeline-container");
+        const status = document.getElementById('status-display');
+        // 5km以内なら高速道路と判定
+        if(nearest && minDist <= 5.0) {
+            const routeName = nearest.highway.trim();
+            status.style.color = "var(--nexco-light)";
+            status.innerText = `LOCKED: ${routeName} (${minDist.toFixed(1)}km)`;
+            renderTimeline(routeName, "timeline-container");
         } else {
-            document.getElementById('status-display').innerText = "高速道路外です";
+            status.style.color = "var(--alert-red)";
+            status.innerText = `高速道路外です (最寄り: ${minDist.toFixed(1)}km)`;
         }
     }
 
+    // 6. タイムライン(SA/PA)の描画
     function renderTimeline(route, containerId) {
         const container = document.getElementById(containerId);
         container.innerHTML = "";
-        facilities.filter(f => f.highway.trim() === route).forEach(f => {
+        
+        const matches = facilities.filter(f => f.highway && f.highway.trim() === route);
+        
+        if (matches.length === 0) {
+            container.innerHTML = `<div style="color:var(--alert-red); padding:10px;">データベースに「${route}」の施設情報がありません。</div>`;
+            return;
+        }
+
+        matches.forEach(f => {
             let icons = "";
-            if(f.gas_24h == "1") icons += "⛽";
-            if(f.conveni == "1") icons += "🏪";
-            if(f.restaurant == "1") icons += "🍽️";
-            container.innerHTML += `<div class="sapa-card"><div class="sapa-name">${f.name}</div><div class="icons">${icons}</div></div>`;
+            if(f.gas_24h == "1" || f.gas_24h == "true") icons += "⛽ ";
+            if(f.conveni == "1" || f.conveni == "true") icons += "🏪 ";
+            if(f.restaurant == "1" || f.restaurant == "true") icons += "🍽️ ";
+            if(f.hw_oasis == "1" || f.hw_oasis == "true") icons += "🎡 ";
+            
+            container.innerHTML += `
+                <div class="sapa-card">
+                    <div class="sapa-name">${f.name}</div>
+                    <div class="icons">${icons}</div>
+                </div>`;
         });
     }
 
-    function renderSelectedRoute() { renderTimeline(document.getElementById('route-select').value, "db-timeline-container"); }
-    function switchMode(m) {
-        document.getElementById('drive-view').style.display = m === 'drive' ? 'block' : 'none';
-        document.getElementById('db-view').style.display = m === 'db' ? 'block' : 'none';
-        document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active'));
+    // プルダウン選択時の描画
+    function renderSelectedRoute() { 
+        const route = document.getElementById('route-select').value;
+        if(route) renderTimeline(route, "db-timeline-container"); 
     }
 </script>
 </body>
