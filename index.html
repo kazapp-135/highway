@@ -1,54 +1,246 @@
-// 📍 本物のGPS 3点計測＆ラズパイへの解析リクエスト
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KAZ-HIGHWAY</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <style>
+        /* ⚙️ フォント読込: 英字 Orbitron / 日本語 IBM Plex Sans JP */
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;700&family=Orbitron:wght@500;800;900&display=swap');
+
+        /* 🎨 漆黒×NEXCOグリーンの極限UIパレット */
+        :root {
+            --bg-color: #080a08;         
+            --panel-bg: #121612;         
+            --nexco-green: #00A34F;      
+            --nexco-light: #1dd372;      
+            --nexco-dark: #006b33;       
+            --nexco-muted: #0d2918;      
+            --text-main: #E8EFE8;        
+            --text-sub: #7A857A;         
+            --alert-red: #E63946;        
+        }
+        
+        body { 
+            background-color: var(--bg-color); 
+            color: var(--text-main); 
+            font-family: 'Orbitron', 'IBM Plex Sans JP', sans-serif; 
+            margin: 0; 
+            padding-bottom: 80px; 
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        header { 
+            background: linear-gradient(135deg, var(--nexco-dark), var(--nexco-green));
+            text-align: center; 
+            padding: 16px 0; 
+            font-size: 20px; 
+            font-weight: 900; 
+            letter-spacing: 3px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.8);
+            border-bottom: 1px solid var(--nexco-light);
+        }
+        
+        .container { padding: 16px; max-width: 600px; margin: 0 auto; }
+        
+        .mode-switch { display: flex; gap: 8px; margin-bottom: 24px; }
+        .mode-btn { 
+            flex: 1; padding: 14px; background: var(--panel-bg); color: var(--text-sub); 
+            border: 1px solid #2a332a; border-radius: 8px; font-size: 14px; font-weight: bold; 
+            font-family: 'IBM Plex Sans JP', sans-serif; cursor: pointer; transition: all 0.2s ease;
+        }
+        .mode-btn.active { 
+            background: var(--nexco-muted); color: var(--nexco-light); 
+            border-color: var(--nexco-green); box-shadow: inset 0 0 10px rgba(0, 163, 79, 0.2);
+        }
+        
+        #gps-btn { 
+            width: 100%; padding: 20px; background: linear-gradient(180deg, var(--nexco-light), var(--nexco-green)); 
+            color: #002210; font-size: 18px; font-weight: 900; letter-spacing: 1px; border: none; 
+            border-radius: 12px; margin-bottom: 20px; cursor: pointer; 
+            box-shadow: 0 6px 0 var(--nexco-dark), 0 10px 20px rgba(0, 163, 79, 0.3); transition: all 0.1s;
+        }
+        #gps-btn:active { transform: translateY(6px); box-shadow: 0 0 0 var(--nexco-dark), 0 0 0 rgba(0, 163, 79, 0); }
+        #gps-btn:disabled { background: var(--panel-bg); color: var(--text-sub); box-shadow: 0 6px 0 #000; }
+
+        .timeline { border-left: 3px solid var(--nexco-dark); margin-left: 16px; padding-left: 24px; padding-top: 10px; }
+        .sapa-card { background: var(--panel-bg); padding: 16px; border-radius: 10px; margin-bottom: 16px; position: relative; border: 1px solid #1f261f; }
+        .sapa-card::before { 
+            content: ''; position: absolute; left: -32px; top: 20px; width: 12px; height: 12px; 
+            background: var(--bg-color); border: 3px solid var(--nexco-light); border-radius: 50%; 
+            box-shadow: 0 0 8px var(--nexco-light);
+        }
+        
+        .sapa-name { font-size: 22px; font-weight: 900; margin-bottom: 6px; color: #FFF; }
+        .sapa-icons { font-size: 20px; margin-top: 10px; display: flex; gap: 12px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
+        
+        .memo-alert { 
+            color: var(--alert-red); font-size: 13px; margin-top: 10px; font-weight: bold; 
+            font-family: 'IBM Plex Sans JP', sans-serif; background: rgba(230, 57, 70, 0.08); 
+            padding: 8px 12px; border-left: 3px solid var(--alert-red); border-radius: 4px;
+        }
+
+        .edit-btn { 
+            position: absolute; right: 12px; top: 16px; background: var(--nexco-muted); 
+            border: 1px solid var(--nexco-dark); color: var(--nexco-light); padding: 6px 12px; 
+            border-radius: 6px; font-size: 12px; font-weight: bold; font-family: 'IBM Plex Sans JP', sans-serif; cursor: pointer; 
+        }
+        
+        #status-display { text-align: center; color: var(--nexco-light); margin-bottom: 20px; font-size: 14px; font-weight: bold; letter-spacing: 1.5px; }
+        #route-select { width: 100%; padding: 14px; font-size: 16px; font-weight: bold; margin-bottom: 20px; background: var(--panel-bg); color: var(--nexco-light); border: 1px solid var(--nexco-dark); border-radius: 8px; font-family: 'IBM Plex Sans JP', sans-serif; outline: none; }
+    </style>
+</head>
+<body>
+
+    <header>KAZ-HIGHWAY</header>
+
+    <div class="container">
+        <div class="mode-switch">
+            <button class="mode-btn active" id="mode-drive" onclick="switchMode('drive')">助手席モード</button>
+            <button class="mode-btn" id="mode-db" onclick="switchMode('db')">路線図検索</button>
+        </div>
+
+        <div id="drive-view">
+            <button id="gps-btn" onclick="startGPSAnalysis()">SCANNING LIVE ROUTE</button>
+            <div id="status-display">GPS STANDBY.</div>
+            <div class="timeline" id="timeline-container"></div>
+        </div>
+
+        <div id="db-view" style="display: none;">
+            <select id="route-select"><option value="">▼ 路線図を選択</option></select>
+            <div class="timeline" id="db-timeline-container"></div>
+        </div>
+    </div>
+
+<script>
+// ★★★ 外出先用：あなたのCloudflare TunnelのURLに書き換えてください ★★★
+const API_BASE_URL = "https://intimate-newer-mouse-hopefully.trycloudflare.com"; 
+
+let facilitiesDB = [];
+
+window.onload = async () => {
+    document.getElementById('status-display').innerText = "SYSTEM BOOTING...";
+    try {
+        const facRes = await fetch(`${API_BASE_URL}/api/facilities`);
+        const facText = await facRes.text();
+        Papa.parse(facText, { header: true, skipEmptyLines: true, complete: (res) => { facilitiesDB = res.data; } });
+        document.getElementById('status-display').innerText = "DATABASE ONLINE.";
+        populateRouteSelect();
+    } catch (e) {
+        document.getElementById('status-display').innerText = "LINK CRITICAL ERROR.";
+        document.getElementById('status-display').style.color = "var(--alert-red)";
+    }
+};
+
+// ==========================================
+// 🚀 スマホ側：GPSを取得してラズパイに投げるだけ
+// ==========================================
 async function startGPSAnalysis() {
     const status = document.getElementById('status-display');
     const btn = document.getElementById('gps-btn');
     document.getElementById('timeline-container').innerHTML = "";
-    
     btn.disabled = true;
-    let capturedCoords = [];
-
-    // 位置情報を取得するPromise関数
-    const getPos = () => new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, { 
-            enableHighAccuracy: true, 
-            timeout: 5000, 
-            maximumAge: 0 
-        });
-    });
-
-    try {
-        // 1秒に1回、計3回のGPS座標を取得
-        for (let i = 1; i <= 3; i++) {
-            status.innerText = `[${i}/3] TRACKING SATELLITE...`;
-            const pos = await getPos();
-            capturedCoords.push({ lat: pos.coords.latitude, lon: pos.coords.longitude });
-            if (i < 3) await new Promise(r => setTimeout(r, 1000)); 
+    
+    let coords = [];
+    
+    // 1秒に1回、計3回GPSを取得
+    for (let i = 1; i <= 3; i++) {
+        status.innerText = `[${i}/3] TRACKING SATELLITE...`;
+        try {
+            const pos = await getPosition();
+            coords.push({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+            await new Promise(r => setTimeout(r, 1000)); 
+        } catch (err) {
+            status.innerText = "GPS SIGNAL LOST.";
+            btn.disabled = false;
+            return;
         }
+    }
 
-        status.innerText = "DATA ACQUIRED. CALCULATING VECTOR...";
+    status.innerText = "DATA ACQUIRED. SENDING TO RASPBERRY PI...";
 
-        // ラズパイ（頭脳）へ座標データを投げて解析させる
+    // 取得した3つの座標をラズパイに送信して解析を依頼
+    try {
         const res = await fetch(`${API_BASE_URL}/api/analyze_route`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ coords: capturedCoords })
+            body: JSON.stringify({ coords: coords })
         });
-        
         const result = await res.json();
 
         if (result.status === "success") {
-            status.innerText = `TARGET ACQUIRED: 誤差 ${result.distance_m}m で捕捉`;
-            renderTimeline(result.highway, "timeline-container");
+            status.innerText = `LOCKED ON: ${result.route}`;
+            renderTimeline(result.route, "timeline-container");
         } else {
-            status.innerText = "ERROR: " + result.message;
-            status.style.color = "var(--alert-red)";
+            status.innerText = result.message; // 「高速に乗ってません」エラーを表示
         }
-
-    } catch (error) {
-        status.innerText = "ERROR: GPS信号を受信できません。";
-        status.style.color = "var(--alert-red)";
-    } finally {
-        btn.disabled = false;
-        btn.innerText = "POSITION RE-SCAN";
+    } catch (e) {
+        status.innerText = "SERVER CONNECTION FAILED.";
     }
+
+    btn.disabled = false;
+    btn.innerText = "POSITION RE-SCAN";
 }
+
+// GPSを取得する関数
+function getPosition() {
+    return new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true });
+    });
+}
+
+function renderTimeline(routeName, containerId) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = `<div style="color:var(--nexco-light); font-size:14px; font-weight:bold; margin-bottom:16px; letter-spacing:1px;">ROUTE: ${routeName}</div>`;
+    
+    const routeFacilities = facilitiesDB.filter(f => f.highway === routeName);
+    routeFacilities.forEach(f => {
+        let icons = "";
+        if(f.gas_24h == "1") icons += "⛽ ";
+        if(f.restaurant == "1") icons += "🍽️ ";
+        if(f.conveni == "1") icons += "🏪 ";
+        if(f.shower == "1" || String(f.memo).includes("入浴")) icons += "🚿 ";
+
+        let memoHtml = f.memo ? `<div class="memo-alert">⚠️ ${f.memo}</div>` : "";
+
+        container.innerHTML += `
+            <div class="sapa-card">
+                <div class="sapa-name">${f.name}</div>
+                <div class="sapa-icons">${icons}</div>
+                ${memoHtml}
+                <button class="edit-btn" onclick="requestEdit('${f.highway}', '${f.name}')">修正依頼</button>
+            </div>
+        `;
+    });
+}
+
+async function requestEdit(highway, name) {
+    const memo = prompt(`【${name}】のデータ修正提案を入力してください`);
+    if (!memo) return;
+    try {
+        await fetch(`${API_BASE_URL}/api/correction`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ highway, name, memo })
+        });
+        alert("TRANSMISSION SUCCESS: 修正データを保留領域に記録しました。");
+    } catch (e) { alert("ERROR: ラズパイへの送信に失敗しました。"); }
+}
+
+function switchMode(mode) {
+    document.getElementById('mode-drive').classList.toggle('active', mode === 'drive');
+    document.getElementById('mode-db').classList.toggle('active', mode === 'db');
+    document.getElementById('drive-view').style.display = mode === 'drive' ? 'block' : 'none';
+    document.getElementById('db-view').style.display = mode === 'db' ? 'block' : 'none';
+}
+
+function populateRouteSelect() {
+    const select = document.getElementById('route-select');
+    [...new Set(facilitiesDB.map(f => f.highway))].filter(Boolean).forEach(r => {
+        select.innerHTML += `<option value="${r}">${r}</option>`;
+    });
+    select.addEventListener('change', (e) => { if(e.target.value) renderTimeline(e.target.value, "db-timeline-container"); });
+}
+</script>
+</body>
+</html>
