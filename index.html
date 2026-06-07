@@ -1,152 +1,81 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KAZ-HIGHWAY-NAVI</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;800;900&display=swap');
-        :root { --bg-color: #080a08; --panel-bg: #121612; --nexco-green: #00A34F; --nexco-light: #1dd372; --nexco-dark: #006b33; --text-main: #E8EFE8; --text-sub: #7A857A; --alert-red: #E63946; --accent-gold: #FFD700; }
-        body { background-color: var(--bg-color); color: var(--text-main); font-family: 'Orbitron', sans-serif; margin: 0; padding-bottom: 80px; user-select: none; -webkit-user-select: none; }
-        header { background: linear-gradient(135deg, var(--nexco-dark), var(--nexco-green)); text-align: center; padding: 20px; font-size: 22px; font-weight: 900; letter-spacing: 3px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); -webkit-tap-highlight-color: transparent; }
-        .container { padding: 20px; max-width: 600px; margin: 0 auto; }
-        .mode-switch { display: flex; gap: 10px; margin-bottom: 24px; }
-        .mode-btn { flex: 1; padding: 15px; background: var(--panel-bg); color: var(--text-sub); border: 1px solid #2a332a; border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer; }
-        .mode-btn.active { background: #0d2918; color: var(--nexco-light); border-color: var(--nexco-green); }
-        #gps-btn { width: 100%; padding: 20px; background: linear-gradient(180deg, var(--nexco-light), var(--nexco-green)); color: #002210; font-size: 18px; font-weight: 900; border: none; border-radius: 12px; margin-bottom: 20px; cursor: pointer; box-shadow: 0 4px 15px rgba(0, 163, 79, 0.3); transition: all 0.1s; }
-        #gps-btn:active { transform: scale(0.98); }
-        .timeline-wrapper { border-left: 3px solid var(--nexco-green); margin-left: 10px; padding-left: 20px; margin-top: 10px; }
-        .sapa-card { background: var(--panel-bg); padding: 16px; border-radius: 10px; margin-bottom: 16px; border: 1px solid #1f261f; position: relative; }
-        .sapa-card::before { content: ''; position: absolute; left: -28px; top: 50%; transform: translateY(-50%); width: 13px; height: 13px; background-color: var(--nexco-light); border-radius: 50%; box-shadow: 0 0 8px var(--nexco-light); }
-        .nav-label { font-size: 12px; color: var(--accent-gold); font-weight: bold; margin-bottom: 4px; letter-spacing: 1px; }
-        .card-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px;}
-        .sapa-name { font-size: 18px; font-weight: bold; }
-        .distance-badge { background: #2a332a; color: var(--nexco-light); padding: 4px 8px; border-radius: 4px; font-size: 14px; font-weight: bold; border: 1px solid var(--nexco-green); }
-        .icons { font-size: 16px; letter-spacing: 2px; color: #aaa; margin-top: 5px; }
-        #status-display { text-align: center; color: var(--nexco-light); margin-bottom: 20px; font-size: 15px; font-weight: bold; min-height: 20px; }
-        #test-panel { display: none; background: #2a0000; border: 1px solid var(--alert-red); padding: 15px; margin-bottom: 20px; color: #ff9999; border-radius: 8px; font-size: 12px; }
-        #test-panel input { width: 80px; background: black; color: white; border: 1px solid red; margin: 0 5px; padding: 5px; }
-        select { width: 100%; padding: 15px; background: var(--panel-bg); color: white; border: 1px solid var(--nexco-green); border-radius: 8px; font-size: 16px; }
-    </style>
-</head>
-<body>
-    <header onclick="toggleDebug()">KAZ-HIGHWAY</header>
-    <div class="container">
-        <div id="test-panel">
-            <b style="font-size:14px;">[DEBUG] 海老名方面進行テスト</b><br><br>
-            Lat: <input type="number" id="test-lat" value="35.4552">
-            Lon: <input type="number" id="test-lon" value="139.3939">
-        </div>
-        <div class="mode-switch">
-            <button class="mode-btn active" id="mode-drive" onclick="switchMode('drive')">助手席モード</button>
-            <button class="mode-btn" id="mode-db" onclick="switchMode('db')">路線図検索</button>
-        </div>
-        <div id="drive-view">
-            <button id="gps-btn" onclick="startAnalysis()">SCANNING LIVE ROUTE</button>
-            <div id="status-display">DB READY.</div>
-            <div id="timeline-container"></div>
-        </div>
-        <div id="db-view" style="display: none;">
-            <select id="route-select" onchange="renderSelectedRoute()"><option value="">▼ 路線図を選択</option></select>
-            <div id="db-timeline-container" style="margin-top:20px;"></div>
-        </div>
-    </div>
-    <script>
-        let joints = [], facilities = [], clickCount = 0, gpsScanCount = 0, gpsHistory = [];
-        const MAX_GPS_SCANS = 3;
+<style>
+    /* タイムラインの親要素：左側の縦線 */
+    .timeline-wrapper {
+        border-left: 3px solid var(--nexco-green);
+        margin-left: 15px;
+        padding-left: 20px;
+        margin-top: 20px;
+    }
+    
+    /* 各カードのスタイル */
+    .sapa-card { 
+        background: var(--panel-bg); 
+        padding: 16px; 
+        border-radius: 10px; 
+        margin-bottom: 20px; 
+        border: 1px solid #1f261f; 
+        position: relative;
+    }
+    
+    /* 縦線上の「丸ポチ」装飾 */
+    .sapa-card::before {
+        content: '';
+        position: absolute;
+        left: -29px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 14px;
+        height: 14px;
+        background-color: var(--nexco-light);
+        border-radius: 50%;
+        box-shadow: 0 0 10px var(--nexco-light);
+    }
+    
+    .card-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px;}
+    .sapa-name { font-size: 18px; font-weight: bold; }
+    .distance-badge { color: var(--nexco-light); font-size: 14px; font-weight: bold; }
+    .icons { font-size: 16px; color: #888; }
+</style>
 
-        window.onload = async () => {
-            const [jRes, fRes] = await Promise.all([fetch('./data/highway_joints.csv'), fetch('./data/highway_facilities_db.csv')]);
-            joints = Papa.parse(await jRes.text(), {header:true, skipEmptyLines:true}).data;
-            facilities = Papa.parse(await fRes.text(), {header:true, skipEmptyLines:true}).data;
-            const routes = [...new Set(facilities.map(f => f.highway ? f.highway.trim() : ""))].filter(Boolean);
-            const select = document.getElementById('route-select');
-            routes.forEach(r => select.innerHTML += `<option value="${r}">${r}</option>`);
-        };
+<script>
+    // タイムライン表示用のレンダリング関数
+    function renderLiveTimeline(route, currentLat, currentLon) {
+        const container = document.getElementById('timeline-container');
+        container.innerHTML = ""; // 一旦クリア
+        
+        // 路線でフィルタリング
+        const matches = facilities.filter(f => f.highway && f.highway.trim() === route);
+        
+        // 縦線を入れるためのラッパー
+        const wrapper = document.createElement('div');
+        wrapper.className = 'timeline-wrapper';
 
-        function toggleDebug() { if(++clickCount >= 5) document.getElementById('test-panel').style.display = 'block'; }
-
-        function switchMode(mode) {
-            document.getElementById('drive-view').style.display = mode === 'drive' ? 'block' : 'none';
-            document.getElementById('db-view').style.display = mode === 'db' ? 'block' : 'none';
-            document.getElementById('mode-drive').classList.toggle('active', mode === 'drive');
-            document.getElementById('mode-db').classList.toggle('active', mode === 'db');
-        }
-
-        function startAnalysis() {
-            gpsScanCount = 0; gpsHistory = [];
-            scanGPSLoop();
-        }
-
-        function scanGPSLoop() {
-            gpsScanCount++;
-            document.getElementById('status-display').innerText = `AQUIRING GPS SIGNAL... [${gpsScanCount}/${MAX_GPS_SCANS}]`;
+        matches.forEach(f => {
+            const fLat = parseFloat(f.lat);
+            const fLon = parseFloat(f.lon);
+            // 簡易距離計算
+            const dist = Math.sqrt((fLat - currentLat)**2 + (fLon - currentLon)**2) * 111.0;
             
-            if(document.getElementById('test-panel').style.display === 'block') {
-                const baseLat = parseFloat(document.getElementById('test-lat').value) - (gpsScanCount * 0.005);
-                const baseLon = parseFloat(document.getElementById('test-lon').value) - (gpsScanCount * 0.005);
-                handleGPS({ coords: { latitude: baseLat, longitude: baseLon } });
-            } else {
-                navigator.geolocation.getCurrentPosition(handleGPS, (e) => document.getElementById('status-display').innerText = "GPS Error: " + e.code, {enableHighAccuracy: true});
-            }
-        }
-
-        function handleGPS(pos) {
-            gpsHistory.push({ lat: pos.coords.latitude, lon: pos.coords.longitude });
-            if (gpsScanCount < MAX_GPS_SCANS) setTimeout(scanGPSLoop, 800);
-            else calculateNearest(pos.coords.latitude, pos.coords.longitude);
-        }
-
-        function calculateNearest(lat, lon) {
-            let nearest = null, minDist = 9999;
-            joints.forEach(j => {
-                const dist = Math.sqrt((parseFloat(j.lat)-lat)**2 + (parseFloat(j.lon)-lon)**2) * 111.0;
-                if(dist < minDist) { minDist = dist; nearest = j; }
-            });
-            if(nearest && minDist <= 5.0) {
-                document.getElementById('status-display').innerText = `LOCKED: ${nearest.highway.trim()} (${minDist.toFixed(1)}km)`;
-                renderLiveTimeline(nearest.highway.trim(), lat, lon);
-            } else {
-                document.getElementById('status-display').innerText = "高速道路外です";
-            }
-        }
-
-        function renderLiveTimeline(route, lat, lon) {
-            const container = document.getElementById('timeline-container');
-            container.innerHTML = "";
-            const wrapper = document.createElement('div'); wrapper.className = 'timeline-wrapper';
+            let icons = "";
+            if(f.gas_24h == "1" || f.gas_24h == "true") icons += "⛽ ";
+            if(f.conveni == "1" || f.conveni == "true") icons += "🏪 ";
+            if(f.restaurant == "1" || f.restaurant == "true") icons += "🍽️ ";
             
-            const matches = facilities.filter(f => f.highway && f.highway.trim() === route).map(f => ({
-                ...f, dist: Math.sqrt((parseFloat(f.lat)-lat)**2 + (parseFloat(f.lon)-lon)**2) * 111.0
-            })).sort((a,b) => a.dist - b.dist).slice(0, 3);
-
-            matches.forEach((f, i) => {
-                let icons = "";
-                if(f.gas_24h == "1") icons += "⛽ ";
-                if(f.conveni == "1") icons += "🏪 ";
-                if(f.restaurant == "1") icons += "🍽️ ";
-                wrapper.innerHTML += `
-                    <div class="sapa-card">
-                        <div class="nav-label">▼ ${["次", "次の次", "次の次の次"][i]}</div>
-                        <div class="card-header">
-                            <div class="sapa-name">${f.name}</div>
-                            <div class="distance-badge">あと ${f.dist.toFixed(1)} km</div>
-                        </div>
-                        <div class="icons">${icons}</div>
-                    </div>`;
-            });
-            container.appendChild(wrapper);
-        }
-
-        function renderSelectedRoute() {
-            const route = document.getElementById('route-select').value;
-            const container = document.getElementById('db-timeline-container');
-            container.innerHTML = "";
-            facilities.filter(f => f.highway && f.highway.trim() === route).forEach(f => {
-                container.innerHTML += `<div class="sapa-card" style="padding:12px;"><div class="sapa-name">${f.name}</div></div>`;
-            });
-        }
-    </script>
-</body>
-</html>
+            // カードのHTML
+            const card = document.createElement('div');
+            card.className = 'sapa-card';
+            card.innerHTML = `
+                <div>
+                    <div class="card-header">
+                        <div class="sapa-name">${f.name}</div>
+                        <div class="distance-badge">あと ${dist.toFixed(1)} km</div>
+                    </div>
+                    <div class="icons">${icons}</div>
+                </div>
+            `;
+            wrapper.appendChild(card);
+        });
+        
+        container.appendChild(wrapper);
+    }
+</script>
