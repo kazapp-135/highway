@@ -6,10 +6,10 @@
     <title>KAZ-HIGHWAY</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
-        /* ⚙️ フォント読込: 英字 Orbitron / 日本語 IBM Plex Sans JP */
+        /* ⚙️ フォント読込 */
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;700&family=Orbitron:wght@500;800;900&display=swap');
 
-        /* 🎨 漆黒×NEXCOグリーンの極限UIパレット */
+        /* 🎨 カラーパレット */
         :root {
             --bg-color: #080a08;         
             --panel-bg: #121612;         
@@ -19,27 +19,22 @@
             --nexco-muted: #0d2918;      
             --text-main: #E8EFE8;        
             --text-sub: #7A857A;         
-            --alert-red: #E63946;        
+            --alert-red: #E63946;
+            --dev-red: #ff3333;        
         }
         
         body { 
-            background-color: var(--bg-color); 
-            color: var(--text-main); 
+            background-color: var(--bg-color); color: var(--text-main); 
             font-family: 'Orbitron', 'IBM Plex Sans JP', sans-serif; 
-            margin: 0; 
-            padding-bottom: 80px; 
-            -webkit-tap-highlight-color: transparent;
+            margin: 0; padding-bottom: 80px; -webkit-tap-highlight-color: transparent;
         }
         
         header { 
             background: linear-gradient(135deg, var(--nexco-dark), var(--nexco-green));
-            text-align: center; 
-            padding: 16px 0; 
-            font-size: 20px; 
-            font-weight: 900; 
-            letter-spacing: 3px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.8);
+            text-align: center; padding: 16px 0; font-size: 20px; font-weight: 900; 
+            letter-spacing: 3px; box-shadow: 0 4px 15px rgba(0,0,0,0.8);
             border-bottom: 1px solid var(--nexco-light);
+            cursor: pointer; /* ヘッダーをタップ可能に */
         }
         
         .container { padding: 16px; max-width: 600px; margin: 0 auto; }
@@ -89,13 +84,36 @@
         
         #status-display { text-align: center; color: var(--nexco-light); margin-bottom: 20px; font-size: 14px; font-weight: bold; letter-spacing: 1.5px; }
         #route-select { width: 100%; padding: 14px; font-size: 16px; font-weight: bold; margin-bottom: 20px; background: var(--panel-bg); color: var(--nexco-light); border: 1px solid var(--nexco-dark); border-radius: 8px; font-family: 'IBM Plex Sans JP', sans-serif; outline: none; }
+
+        /* 🚨 デバッグ用隠しパネルのスタイル */
+        #test-panel {
+            display: none; background: #2a0000; border: 1px solid var(--dev-red); border-radius: 8px; 
+            padding: 12px; margin-bottom: 20px;
+        }
+        .test-title { color: var(--dev-red); font-size: 14px; font-weight: bold; margin-bottom: 8px; }
+        .test-input { width: 45%; padding: 8px; background: #000; color: #fff; border: 1px solid #660000; border-radius: 4px; margin-bottom: 8px; font-family: monospace; }
+        .test-select { width: 100%; padding: 8px; background: #000; color: #fff; border: 1px solid #660000; border-radius: 4px; font-family: 'IBM Plex Sans JP', sans-serif; }
     </style>
 </head>
 <body>
 
-    <header>KAZ-HIGHWAY</header>
+    <header id="app-header">KAZ-HIGHWAY</header>
 
     <div class="container">
+        <div id="test-panel">
+            <div class="test-title">[DEV] GPS OVERRIDE SYSTEM ACTIVE</div>
+            <div style="display: flex; justify-content: space-between;">
+                <input type="number" id="test-lat" class="test-input" placeholder="Latitude (緯度)" value="35.4552">
+                <input type="number" id="test-lon" class="test-input" placeholder="Longitude (経度)" value="139.3939">
+            </div>
+            <select id="test-preset" class="test-select" onchange="applyTestPreset()">
+                <option value="">▼ テスト座標プリセット（選択すると入力欄に入ります）</option>
+                <option value="35.45520,139.39390">東名：海老名SA付近</option>
+                <option value="36.14380,139.16780">関越：寄居PA付近</option>
+                <option value="35.61200,139.73400">首都高：大井PA付近</option>
+            </select>
+        </div>
+
         <div class="mode-switch">
             <button class="mode-btn active" id="mode-drive" onclick="switchMode('drive')">助手席モード</button>
             <button class="mode-btn" id="mode-db" onclick="switchMode('db')">路線図検索</button>
@@ -114,9 +132,15 @@
     </div>
 
 <script>
-// ★★★ 外出先用：あなたのCloudflare TunnelのURLに書き換えてください ★★★
-const API_BASE_URL = "https://api.kazapp-gojagoja.com"
+// ★★★ ここを必ずあなたの設定したドメインに書き換えてください ★★★
+const API_BASE_URL = "https://api.kazapp-gojagoja.com"; 
+
 let facilitiesDB = [];
+
+// 💡 イースターエッグ（隠しテストモード）の制御変数
+let clickCount = 0;
+let clickTimer = null;
+let isTestMode = false;
 
 window.onload = async () => {
     document.getElementById('status-display').innerText = "SYSTEM BOOTING...";
@@ -133,7 +157,33 @@ window.onload = async () => {
 };
 
 // ==========================================
-// 🚀 スマホ側：GPSを取得してラズパイに投げるだけ
+// 🚨 隠しコマンド：ヘッダー5回タップでテストモード起動
+// ==========================================
+document.getElementById('app-header').addEventListener('click', () => {
+    clickCount++;
+    if (clickCount >= 5) {
+        document.getElementById('test-panel').style.display = 'block';
+        isTestMode = true;
+        document.getElementById('status-display').innerText = "DEV MODE ACTIVATED.";
+        clickCount = 0; // リセット
+    }
+    // 2秒間タップが途切れたらカウントをリセット
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(() => { clickCount = 0; }, 2000);
+});
+
+// テスト座標のプリセットを反映する関数
+function applyTestPreset() {
+    const val = document.getElementById('test-preset').value;
+    if (val) {
+        const coords = val.split(',');
+        document.getElementById('test-lat').value = coords[0];
+        document.getElementById('test-lon').value = coords[1];
+    }
+}
+
+// ==========================================
+// 🚀 GPS解析メイン処理（テストモード分岐付き）
 // ==========================================
 async function startGPSAnalysis() {
     const status = document.getElementById('status-display');
@@ -143,13 +193,26 @@ async function startGPSAnalysis() {
     
     let coords = [];
     
-    // 1秒に1回、計3回GPSを取得
+    // 1秒に1回、計3回GPSを取得（テストモード時は手入力を採用）
     for (let i = 1; i <= 3; i++) {
-        status.innerText = `[${i}/3] TRACKING SATELLITE...`;
+        status.innerText = isTestMode ? `[${i}/3] INJECTING FAKE GPS...` : `[${i}/3] TRACKING SATELLITE...`;
         try {
-            const pos = await getPosition();
-            coords.push({ lat: pos.coords.latitude, lon: pos.coords.longitude });
-            await new Promise(r => setTimeout(r, 1000)); 
+            let lat, lon;
+            
+            if (isTestMode) {
+                // テストモード：入力欄の値を強制的に採用
+                lat = parseFloat(document.getElementById('test-lat').value);
+                lon = parseFloat(document.getElementById('test-lon').value);
+                await new Promise(r => setTimeout(r, 800)); // リアル感を出すためのウェイト
+            } else {
+                // 通常モード：本物のGPSを取得
+                const pos = await getPosition();
+                lat = pos.coords.latitude;
+                lon = pos.coords.longitude;
+                await new Promise(r => setTimeout(r, 1000)); 
+            }
+            
+            coords.push({ lat: lat, lon: lon });
         } catch (err) {
             status.innerText = "GPS SIGNAL LOST.";
             btn.disabled = false;
@@ -159,7 +222,6 @@ async function startGPSAnalysis() {
 
     status.innerText = "DATA ACQUIRED. SENDING TO RASPBERRY PI...";
 
-    // 取得した3つの座標をラズパイに送信して解析を依頼
     try {
         const res = await fetch(`${API_BASE_URL}/api/analyze_route`, {
             method: "POST",
@@ -169,10 +231,10 @@ async function startGPSAnalysis() {
         const result = await res.json();
 
         if (result.status === "success") {
-            status.innerText = `LOCKED ON: ${result.route}`;
+            status.innerText = `LOCKED ON: ${result.route} (誤差: ${result.distance_km}km)`;
             renderTimeline(result.route, "timeline-container");
         } else {
-            status.innerText = result.message; // 「高速に乗ってません」エラーを表示
+            status.innerText = result.message; 
         }
     } catch (e) {
         status.innerText = "SERVER CONNECTION FAILED.";
@@ -182,7 +244,6 @@ async function startGPSAnalysis() {
     btn.innerText = "POSITION RE-SCAN";
 }
 
-// GPSを取得する関数
 function getPosition() {
     return new Promise((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true });
