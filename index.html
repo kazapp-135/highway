@@ -7,42 +7,29 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;800;900&display=swap');
-        :root { --bg-color: #080a08; --panel-bg: #121612; --nexco-green: #00A34F; --nexco-light: #1dd372; --nexco-dark: #006b33; --nexco-muted: #0d2918; --text-main: #E8EFE8; --text-sub: #7A857A; }
+        :root { --bg-color: #080a08; --panel-bg: #121612; --nexco-green: #00A34F; --nexco-light: #1dd372; --nexco-dark: #006b33; --text-main: #E8EFE8; --text-sub: #7A857A; }
         body { background-color: var(--bg-color); color: var(--text-main); font-family: 'Orbitron', sans-serif; margin: 0; padding-bottom: 80px; }
-        header { background: linear-gradient(135deg, var(--nexco-dark), var(--nexco-green)); text-align: center; padding: 16px 0; font-size: 20px; font-weight: 900; letter-spacing: 3px; }
+        header { background: linear-gradient(135deg, var(--nexco-dark), var(--nexco-green)); text-align: center; padding: 20px; font-size: 20px; font-weight: 900; letter-spacing: 3px; }
         .container { padding: 16px; max-width: 600px; margin: 0 auto; }
-        .mode-switch { display: flex; gap: 8px; margin-bottom: 24px; }
-        .mode-btn { flex: 1; padding: 14px; background: var(--panel-bg); color: var(--text-sub); border: 1px solid #2a332a; border-radius: 8px; font-size: 14px; font-weight: bold; }
-        .mode-btn.active { background: var(--nexco-muted); color: var(--nexco-light); border-color: var(--nexco-green); }
         #gps-btn { width: 100%; padding: 20px; background: linear-gradient(180deg, var(--nexco-light), var(--nexco-green)); color: #002210; font-size: 18px; font-weight: 900; border: none; border-radius: 12px; margin-bottom: 20px; }
-        .sapa-card { background: var(--panel-bg); padding: 16px; border-radius: 10px; margin-bottom: 16px; border: 1px solid #1f261f; }
-        .sapa-name { font-size: 20px; font-weight: bold; }
-        #status-display { text-align: center; color: var(--nexco-light); margin-bottom: 20px; font-size: 14px; font-weight: bold; }
+        .sapa-card { background: var(--panel-bg); padding: 16px; border-radius: 10px; margin-bottom: 16px; border: 1px solid #1f261f; display: flex; justify-content: space-between; align-items: center;}
+        .sapa-name { font-size: 18px; font-weight: bold; }
+        .icon-box { font-size: 18px; color: var(--nexco-light); }
+        #status-display { text-align: center; color: var(--nexco-light); margin-bottom: 20px; }
     </style>
 </head>
 <body>
     <header>KAZ-HIGHWAY</header>
     <div class="container">
-        <div class="mode-switch">
-            <button class="mode-btn active" id="mode-drive" onclick="switchMode('drive')">助手席モード</button>
-            <button class="mode-btn" id="mode-db" onclick="switchMode('db')">路線図検索</button>
-        </div>
-        <div id="drive-view">
-            <button id="gps-btn" onclick="startLocalAnalysis()">SCANNING LIVE</button>
-            <div id="status-display">LOADED: DATABASE READY.</div>
-            <div id="timeline-container"></div>
-        </div>
-        <div id="db-view" style="display: none;">
-            <select id="route-select" onchange="renderSelectedRoute()" style="width:100%; padding:10px; background:#121612; color:#fff;"><option value="">▼ 路線図を選択</option></select>
-            <div id="db-timeline-container" style="margin-top:20px;"></div>
-        </div>
+        <button id="gps-btn" onclick="startLocalAnalysis()">SCANNING LIVE</button>
+        <div id="status-display">LOADED: DB READY</div>
+        <div id="timeline-container"></div>
     </div>
 
 <script>
     let joints = [];
     let facilities = [];
 
-    // 起動時にデータを読み込む
     window.onload = async () => {
         try {
             const jRes = await fetch('./data/highway_joints.csv');
@@ -52,16 +39,13 @@
             const fRes = await fetch('./data/highway_facilities_db.csv');
             const fText = await fRes.text();
             facilities = Papa.parse(fText, {header:true, skipEmptyLines:true}).data;
-
-            populateRouteSelect();
-        } catch (e) { document.getElementById('status-display').innerText = "DB LOAD ERROR"; }
+            document.getElementById('status-display').innerText = "DB LOADED. READY.";
+        } catch (e) { document.getElementById('status-display').innerText = "DB ERROR: " + e.message; }
     };
 
-    // ローカルで計算して路線を特定
     function startLocalAnalysis() {
         navigator.geolocation.getCurrentPosition(pos => {
-            const lat = pos.coords.latitude;
-            const lon = pos.coords.longitude;
+            const { latitude: lat, longitude: lon } = pos.coords;
             let nearest = null;
             let minDist = 9999;
             
@@ -70,38 +54,41 @@
                 if(dist < minDist) { minDist = dist; nearest = j; }
             });
 
-            if(nearest && minDist < 0.05) { // 0.05度は約5km圏内
+            if(nearest && minDist < 0.1) {
                 document.getElementById('status-display').innerText = `LOCKED: ${nearest.highway}`;
-                renderTimeline(nearest.highway, "timeline-container");
+                renderTimeline(nearest.highway);
             } else {
                 document.getElementById('status-display').innerText = "高速道路外です";
             }
         });
     }
 
-    function renderTimeline(routeName, containerId) {
-        const container = document.getElementById(containerId);
+    function renderTimeline(routeName) {
+        const container = document.getElementById('timeline-container');
         container.innerHTML = "";
-        const routeFacilities = facilities.filter(f => f.highway === routeName);
-        routeFacilities.forEach(f => {
-            container.innerHTML += `<div class="sapa-card"><div class="sapa-name">${f.name}</div></div>`;
+        
+        // 🔍 ここが重要！部分一致で検索して、表記ゆれを救う
+        const matches = facilities.filter(f => 
+            f.highway.includes(routeName) || routeName.includes(f.highway)
+        );
+
+        if(matches.length === 0) {
+            container.innerHTML = `<div style="color:red">ERROR: 路線名不一致 ${routeName}</div>`;
+            return;
+        }
+
+        matches.forEach(f => {
+            let icons = "";
+            if(f.gas_24h === "1") icons += "⛽";
+            if(f.conveni === "1") icons += "🏪";
+            if(f.shop === "1") icons += "🛍️";
+            
+            container.innerHTML += `
+                <div class="sapa-card">
+                    <div class="sapa-name">${f.name}</div>
+                    <div class="icon-box">${icons}</div>
+                </div>`;
         });
-    }
-
-    function populateRouteSelect() {
-        const select = document.getElementById('route-select');
-        [...new Set(facilities.map(f => f.highway))].filter(Boolean).forEach(r => {
-            select.innerHTML += `<option value="${r}">${r}</option>`;
-        });
-    }
-
-    function renderSelectedRoute() {
-        renderTimeline(document.getElementById('route-select').value, "db-timeline-container");
-    }
-
-    function switchMode(mode) {
-        document.getElementById('drive-view').style.display = mode === 'drive' ? 'block' : 'none';
-        document.getElementById('db-view').style.display = mode === 'db' ? 'block' : 'none';
     }
 </script>
 </body>
