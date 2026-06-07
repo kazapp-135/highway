@@ -50,8 +50,51 @@
             box-shadow: 0 4px 15px rgba(0, 163, 79, 0.3); transition: all 0.1s;
         }
         #gps-btn:active { transform: scale(0.98); }
-        
-        /* タイムラインナビデザイン */
+        #gps-btn:disabled {
+            background: #1a2a1a;
+            color: var(--text-sub);
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+
+        /* --- GPS スキャンプログレスバー --- */
+        #scan-progress {
+            display: none;
+            margin-bottom: 16px;
+        }
+        .scan-step-row {
+            display: flex; gap: 6px; margin-bottom: 8px;
+        }
+        .scan-step {
+            flex: 1; height: 4px; background: #1f261f; border-radius: 2px;
+            transition: background 0.3s ease;
+        }
+        .scan-step.done   { background: var(--nexco-green); }
+        .scan-step.active { background: var(--nexco-light); animation: pulse-bar 0.6s infinite alternate; }
+        @keyframes pulse-bar { from { opacity: 0.5; } to { opacity: 1; } }
+
+        .scan-phase-label {
+            font-size: 11px; color: var(--text-sub); letter-spacing: 1px;
+            text-align: center; min-height: 14px;
+        }
+
+        /* --- VECTOR LOCKED バナー --- */
+        #vector-banner {
+            display: none;
+            background: #0a2018;
+            border: 1px solid var(--nexco-green);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            animation: fadeIn 0.4s ease;
+        }
+        .vb-route { font-size: 13px; color: var(--text-sub); letter-spacing: 1px; margin-bottom: 4px; }
+        .vb-dir   { font-size: 16px; font-weight: bold; color: var(--nexco-light); }
+        .vb-dot   { font-size: 11px; color: var(--accent-gold); letter-spacing: 1px; margin-top: 2px; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- タイムライン --- */
         .timeline-wrapper {
             border-left: 3px solid var(--nexco-green);
             margin-left: 10px; padding-left: 20px; margin-top: 10px;
@@ -59,17 +102,35 @@
         .sapa-card { 
             background: var(--panel-bg); padding: 16px; border-radius: 10px; 
             margin-bottom: 16px; border: 1px solid #1f261f; position: relative;
+            /* アニメーション初期状態 */
+            opacity: 0;
+            transform: translateX(12px);
+            transition: opacity 0.45s ease, transform 0.45s ease;
+        }
+        .sapa-card.visible {
+            opacity: 1;
+            transform: translateX(0);
         }
         .sapa-card::before {
             content: ''; position: absolute; left: -28px; top: 50%; transform: translateY(-50%);
             width: 13px; height: 13px; background-color: var(--nexco-light);
             border-radius: 50%; box-shadow: 0 0 8px var(--nexco-light);
         }
-        
+        /* 1枚目だけ強調 */
+        .sapa-card.next-highlight {
+            border-color: var(--nexco-green);
+            background: #0d2018;
+        }
+        .sapa-card.next-highlight::before {
+            background-color: var(--accent-gold);
+            box-shadow: 0 0 10px var(--accent-gold);
+        }
+
         .nav-label { 
             font-size: 12px; color: var(--accent-gold); font-weight: bold; 
             margin-bottom: 4px; letter-spacing: 1px;
         }
+        .nav-label.dim { color: var(--text-sub); }
         
         .card-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px;}
         .sapa-name { font-size: 18px; font-weight: bold; line-height: 1.2; }
@@ -113,7 +174,26 @@
 
         <div id="drive-view">
             <button id="gps-btn" onclick="startAnalysis()">SCANNING LIVE ROUTE</button>
+
+            <!-- スキャン進捗バー（3ステップ） -->
+            <div id="scan-progress">
+                <div class="scan-step-row">
+                    <div class="scan-step" id="step-1"></div>
+                    <div class="scan-step" id="step-2"></div>
+                    <div class="scan-step" id="step-3"></div>
+                </div>
+                <div class="scan-phase-label" id="phase-label"></div>
+            </div>
+
             <div id="status-display">DB LOADING...</div>
+
+            <!-- ベクトル確定バナー -->
+            <div id="vector-banner">
+                <div class="vb-route" id="vb-route"></div>
+                <div class="vb-dir" id="vb-dir"></div>
+                <div class="vb-dot">▸ VECTOR LOCKED — NEXT SA/PA AHEAD</div>
+            </div>
+
             <div id="timeline-container"></div>
         </div>
 
@@ -129,8 +209,16 @@
     let clickCount = 0;
     let gpsScanCount = 0;
     const MAX_GPS_SCANS = 3;
-    let gpsHistory = []; // 方向計算のためのGPS履歴
+    let gpsHistory = [];
 
+    // フェーズごとのUI定義
+    const SCAN_PHASES = [
+        { stepId: 'step-1', label: '[ 1/3 ]  現在地を取得中...' },
+        { stepId: 'step-2', label: '[ 2/3 ]  移動ベクトルを計算中...' },
+        { stepId: 'step-3', label: '[ 3/3 ]  ルートを確定中...' },
+    ];
+
+    // ===== DB ロード =====
     window.onload = async () => {
         try {
             const jRes = await fetch('./data/highway_joints.csv');
@@ -149,6 +237,7 @@
         }
     };
 
+    // ===== モード切り替え =====
     function switchMode(mode) {
         document.getElementById('drive-view').style.display = mode === 'drive' ? 'block' : 'none';
         document.getElementById('db-view').style.display = mode === 'db' ? 'block' : 'none';
@@ -164,21 +253,46 @@
         }
     }
 
+    // ===== スキャン開始 =====
     function startAnalysis() {
-        const status = document.getElementById('status-display');
-        document.getElementById('timeline-container').innerHTML = ""; 
+        // UI リセット
+        document.getElementById('gps-btn').disabled = true;
+        document.getElementById('timeline-container').innerHTML = "";
+        document.getElementById('vector-banner').style.display = 'none';
+        document.getElementById('status-display').innerText = "";
+        document.getElementById('status-display').style.color = "var(--nexco-light)";
+
+        // プログレスバー初期化
+        ['step-1','step-2','step-3'].forEach(id => {
+            document.getElementById(id).className = 'scan-step';
+        });
+        document.getElementById('scan-progress').style.display = 'block';
+        document.getElementById('phase-label').innerText = '';
+
         gpsScanCount = 0;
-        gpsHistory = []; // 履歴リセット
-        status.style.color = "var(--nexco-light)";
+        gpsHistory = [];
         scanGPSLoop();
     }
 
-    // 擬似GPSまたは実機GPSを取得する関数
+    // ===== プログレスバー更新 =====
+    function updateScanProgress(phase) {
+        // 前のステップを完了状態に
+        for (let i = 0; i < phase - 1; i++) {
+            document.getElementById(SCAN_PHASES[i].stepId).className = 'scan-step done';
+        }
+        // 現在のステップをアクティブに
+        if (phase <= SCAN_PHASES.length) {
+            document.getElementById(SCAN_PHASES[phase - 1].stepId).className = 'scan-step active';
+            document.getElementById('phase-label').innerText = SCAN_PHASES[phase - 1].label;
+        }
+    }
+
+    // ===== GPS取得（実機 or テストシミュ） =====
     function getPosition(callback, errorCallback) {
         if(document.getElementById('test-panel').style.display === 'block') {
-            // テストモード：海老名方面（南西）へ1スキャンごとに0.005度ずつ進むシミュレーション
             const baseLat = parseFloat(document.getElementById('test-lat').value);
             const baseLon = parseFloat(document.getElementById('test-lon').value);
+            // 南西方向に移動シミュレーション（スキャンごとに +0.005°）
             const simLat = baseLat - (gpsScanCount * 0.005);
             const simLon = baseLon - (gpsScanCount * 0.005);
             callback({ coords: { latitude: simLat, longitude: simLon } });
@@ -188,30 +302,66 @@
         }
     }
 
+    // ===== GPS スキャンループ（3回取得してベクトル計算） =====
     function scanGPSLoop() {
-        const status = document.getElementById('status-display');
         gpsScanCount++;
-        status.innerText = `AQUIRING GPS SIGNAL... [${gpsScanCount}/${MAX_GPS_SCANS}]`;
+        updateScanProgress(gpsScanCount);
 
         getPosition(
             (pos) => {
                 gpsHistory.push({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+
                 if (gpsScanCount < MAX_GPS_SCANS) {
+                    // 次のスキャンへ
                     setTimeout(scanGPSLoop, 800);
                 } else {
-                    status.innerText = `SIGNAL ACQUIRED. CALCULATING...`;
+                    // 全スキャン完了 → ベクトル確定 → ルート検索
+                    SCAN_PHASES.forEach(p => document.getElementById(p.stepId).className = 'scan-step done');
+                    document.getElementById('phase-label').innerText = 'VECTOR ACQUIRED — ルート解析中...';
+
                     setTimeout(() => {
+                        document.getElementById('scan-progress').style.display = 'none';
                         calculateNearest(pos.coords.latitude, pos.coords.longitude);
-                    }, 500);
+                    }, 600);
                 }
             },
             (err) => {
-                status.style.color = "var(--alert-red)";
-                status.innerText = "ERROR: GPS取得失敗 (" + err.code + ")";
+                document.getElementById('scan-progress').style.display = 'none';
+                document.getElementById('status-display').style.color = "var(--alert-red)";
+                document.getElementById('status-display').innerText = "ERROR: GPS取得失敗 (" + err.code + ")";
+                document.getElementById('gps-btn').disabled = false;
             }
         );
     }
 
+    // ===== 移動ベクトル計算（正規化済み） =====
+    function calculateMovementVector() {
+        if (gpsHistory.length < 2) return null;
+        const first = gpsHistory[0];
+        const last  = gpsHistory[gpsHistory.length - 1];
+        const dLat  = last.lat - first.lat;
+        const dLon  = last.lon - first.lon;
+        const magnitude = Math.sqrt(dLat * dLat + dLon * dLon);
+        if (magnitude < 0.00001) return null; // ほぼ停止中
+        return { dLat: dLat / magnitude, dLon: dLon / magnitude, magnitude };
+    }
+
+    // ===== 進行方向ラベル =====
+    function getDirectionLabel(vec) {
+        if (!vec) return "方向不明";
+        // Math.atan2 は北=0、東=90... に変換（dLon=東方向, dLat=北方向）
+        const deg = Math.atan2(vec.dLon, vec.dLat) * 180 / Math.PI;
+        if (deg >= -22.5  && deg <  22.5 ) return "北方向 ↑";
+        if (deg >=  22.5  && deg <  67.5 ) return "北東方向 ↗";
+        if (deg >=  67.5  && deg < 112.5 ) return "東方向 →";
+        if (deg >= 112.5  && deg < 157.5 ) return "南東方向 ↘";
+        if (deg >= 157.5  || deg < -157.5) return "南方向 ↓";
+        if (deg >= -157.5 && deg < -112.5) return "南西方向 ↙";
+        if (deg >= -112.5 && deg <  -67.5) return "西方向 ←";
+        return "北西方向 ↖";
+    }
+
+    // ===== 最寄り路線を特定 =====
     function calculateNearest(currentLat, currentLon) {
         let nearest = null;
         let minDist = 9999;
@@ -225,90 +375,108 @@
         });
 
         const status = document.getElementById('status-display');
+
         if(nearest && minDist <= 5.0) {
             const routeName = nearest.highway.trim();
+            const vec = calculateMovementVector();
+            const dirLabel = getDirectionLabel(vec);
+
             status.style.color = "var(--nexco-light)";
-            // 距離はそのまま残す
-            status.innerText = `LOCKED: ${routeName} (${minDist.toFixed(1)}km)`;
-            renderLiveTimeline(routeName, currentLat, currentLon);
+            status.innerText = `${routeName}  ${dirLabel}`;
+
+            // ベクトル確定バナーを表示
+            document.getElementById('vb-route').innerText = routeName;
+            document.getElementById('vb-dir').innerText = dirLabel;
+            document.getElementById('vector-banner').style.display = 'block';
+
+            renderLiveTimeline(routeName, currentLat, currentLon, vec);
         } else {
             status.style.color = "var(--alert-red)";
             status.innerText = `高速道路外です (最寄り: ${minDist.toFixed(1)}km)`;
         }
+
+        document.getElementById('gps-btn').disabled = false;
     }
 
-    // 助手席モード用（進行方向から次の3つを計算して表示）
-    function renderLiveTimeline(route, currentLat, currentLon) {
+    // ===== 助手席モード: 次・次の次・次の次の次 タイムライン =====
+    function renderLiveTimeline(route, currentLat, currentLon, vec) {
         const container = document.getElementById('timeline-container');
         container.innerHTML = "";
         
         const matches = facilities.filter(f => f.highway && f.highway.trim() === route);
         if (matches.length === 0) return;
 
-        // 1. 移動ベクトルを計算（最初の取得座標から現在の座標へのベクトル）
-        let moveLat = 0, moveLon = 0;
-        if(gpsHistory.length >= 2) {
-            moveLat = currentLat - gpsHistory[0].lat;
-            moveLon = currentLon - gpsHistory[0].lon;
-        }
-        
-        const isMoving = Math.abs(moveLat) > 0.0001 || Math.abs(moveLon) > 0.0001;
+        const isMoving = vec !== null;
 
-        // 2. 各施設との距離と、進行方向にあるか（内積）を計算
-        let upcoming = matches.map(f => {
+        // 各施設の距離と「前方か否か」を計算
+        let facilityList = matches.map(f => {
             const fLat = parseFloat(f.lat);
             const fLon = parseFloat(f.lon);
             if (isNaN(fLat) || isNaN(fLon)) return null;
 
-            // 直線距離の計算
-            const dist = Math.sqrt((fLat - currentLat)**2 + (fLon - currentLon)**2) * 111.0;
-            
-            // 内積（移動ベクトル × 施設へのベクトル）で前方か後方か判定
-            let isAhead = true; 
+            const dLat = fLat - currentLat;
+            const dLon = fLon - currentLon;
+            const dist = Math.sqrt(dLat * dLat + dLon * dLon) * 111.0;
+
+            // 正規化ベクトルとの内積で前方/後方を判定
+            let isAhead = true;
             if (isMoving) {
-                const dotProduct = (fLat - currentLat) * moveLat + (fLon - currentLon) * moveLon;
-                isAhead = dotProduct > 0; // 内積がプラスなら進行方向（前方）にある
+                const dot = dLat * vec.dLat + dLon * vec.dLon;
+                isAhead = dot > 0;
             }
             return { ...f, dist, isAhead };
-        }).filter(f => f !== null);
+        }).filter(Boolean);
 
-        // 前方にあるものだけに絞り、近い順に並び替え
-        let forwardFacilities = upcoming.filter(f => f.isAhead).sort((a,b) => a.dist - b.dist);
+        // 前方施設のみ・近い順にソート
+        let forward = isMoving
+            ? facilityList.filter(f => f.isAhead).sort((a, b) => a.dist - b.dist)
+            : facilityList.sort((a, b) => a.dist - b.dist);
 
-        // ※もし全く動いていなくて方向がわからない場合は、単に近い順にする
-        if (!isMoving || forwardFacilities.length === 0) {
-            forwardFacilities = upcoming.sort((a,b) => a.dist - b.dist);
+        // 前方が0件の場合は全件距離順（停車中など）
+        if (forward.length === 0) {
+            forward = facilityList.sort((a, b) => a.dist - b.dist);
         }
 
-        // 3. 上位3件（次、次の次、その次）だけを抽出
-        const nextThree = forwardFacilities.slice(0, 3);
-        const labels = ["次", "次の次", "次の次の次"];
+        // 上位3件 = 次 / 次の次 / 次の次の次
+        const nextThree = forward.slice(0, 3);
+        const LABEL_TEXTS  = ["▼ 次", "▼ 次の次", "▼ 次の次の次"];
+        const LABEL_STYLES = ["", "dim", "dim"];
 
         const timelineWrapper = document.createElement('div');
         timelineWrapper.className = 'timeline-wrapper';
 
         nextThree.forEach((f, index) => {
             let icons = "";
-            if(f.gas_24h == "1" || f.gas_24h == "true") icons += "⛽ ";
-            if(f.conveni == "1" || f.conveni == "true") icons += "🏪 ";
+            if(f.gas_24h    == "1" || f.gas_24h    == "true") icons += "⛽ ";
+            if(f.conveni    == "1" || f.conveni    == "true") icons += "🏪 ";
             if(f.restaurant == "1" || f.restaurant == "true") icons += "🍽️ ";
-            if(f.hw_oasis == "1" || f.hw_oasis == "true") icons += "🎡 ";
-            
-            timelineWrapper.innerHTML += `
-                <div class="sapa-card">
-                    <div class="nav-label">▼ ${labels[index]}</div>
-                    <div class="card-header">
-                        <div class="sapa-name">${f.name}</div>
-                        <div class="distance-badge">あと ${f.dist.toFixed(1)} km</div>
-                    </div>
-                    <div class="icons">${icons}</div>
-                </div>`;
+            if(f.hw_oasis   == "1" || f.hw_oasis   == "true") icons += "🎡 ";
+
+            const card = document.createElement('div');
+            // 1枚目（次のSA/PA）を強調
+            card.className = 'sapa-card' + (index === 0 ? ' next-highlight' : '');
+
+            card.innerHTML = `
+                <div class="nav-label ${LABEL_STYLES[index]}">${LABEL_TEXTS[index]}</div>
+                <div class="card-header">
+                    <div class="sapa-name">${f.name}</div>
+                    <div class="distance-badge">あと ${f.dist.toFixed(1)} km</div>
+                </div>
+                <div class="icons">${icons || '<span style="color:#444;font-size:12px;">施設情報なし</span>'}</div>
+            `;
+
+            timelineWrapper.appendChild(card);
+
+            // スタガーアニメーション（ベクトル確定後にカードを1枚ずつスライドイン）
+            setTimeout(() => {
+                card.classList.add('visible');
+            }, 80 + index * 180);
         });
         
         container.appendChild(timelineWrapper);
     }
 
-    // 路線図検索モード用（全件表示・距離なし）
+    // ===== 路線図検索モード（全件・距離なし） =====
     function renderSelectedRoute() { 
         const route = document.getElementById('route-select').value;
         const container = document.getElementById('db-timeline-container');
@@ -324,7 +492,7 @@
             if(f.gas_24h == "1" || f.gas_24h == "true") icons += "⛽ ";
             if(f.conveni == "1" || f.conveni == "true") icons += "🏪 ";
             timelineWrapper.innerHTML += `
-                <div class="sapa-card" style="padding: 12px;">
+                <div class="sapa-card visible" style="padding: 12px;">
                     <div class="sapa-name" style="font-size:16px;">${f.name}</div>
                     <div class="icons" style="font-size:14px;">${icons}</div>
                 </div>`;
