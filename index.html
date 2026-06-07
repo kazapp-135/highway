@@ -3,90 +3,90 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KAZ-HIGHWAY</title>
+    <title>KAZ-HIGHWAY-COMPLETE</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;800;900&display=swap');
-        :root { --bg-color: #080a08; --panel-bg: #121612; --nexco-green: #00A34F; --nexco-light: #1dd372; --nexco-dark: #006b33; --text-main: #E8EFE8; --text-sub: #7A857A; }
-        body { background-color: var(--bg-color); color: var(--text-main); font-family: 'Orbitron', sans-serif; margin: 0; padding-bottom: 80px; }
-        header { background: linear-gradient(135deg, var(--nexco-dark), var(--nexco-green)); text-align: center; padding: 20px; font-size: 20px; font-weight: 900; letter-spacing: 3px; }
+        :root { --bg-color: #080a08; --panel-bg: #121612; --nexco-green: #00A34F; --nexco-light: #1dd372; --nexco-dark: #006b33; --text-main: #E8EFE8; }
+        body { background-color: var(--bg-color); color: var(--text-main); font-family: 'Orbitron', sans-serif; margin: 0; padding-bottom: 50px; }
+        header { background: linear-gradient(135deg, var(--nexco-dark), var(--nexco-green)); text-align: center; padding: 20px; font-weight: 900; letter-spacing: 3px; }
         .container { padding: 16px; max-width: 600px; margin: 0 auto; }
-        #gps-btn { width: 100%; padding: 20px; background: linear-gradient(180deg, var(--nexco-light), var(--nexco-green)); color: #002210; font-size: 18px; font-weight: 900; border: none; border-radius: 12px; margin-bottom: 20px; }
-        .sapa-card { background: var(--panel-bg); padding: 16px; border-radius: 10px; margin-bottom: 16px; border: 1px solid #1f261f; display: flex; justify-content: space-between; align-items: center;}
-        .sapa-name { font-size: 18px; font-weight: bold; }
-        .icon-box { font-size: 18px; color: var(--nexco-light); }
-        #status-display { text-align: center; color: var(--nexco-light); margin-bottom: 20px; }
+        .sapa-card { background: var(--panel-bg); padding: 15px; border-radius: 10px; margin-bottom: 12px; border: 1px solid #1f261f; display: flex; justify-content: space-between; align-items: center; }
+        .sapa-name { font-size: 16px; font-weight: bold; }
+        .icons { font-size: 16px; letter-spacing: 2px; }
+        #status-display { color: var(--nexco-light); font-size: 12px; margin-bottom: 10px; text-align: center; }
+        #gps-btn { width: 100%; padding: 15px; background: var(--nexco-green); color: #fff; font-weight: bold; border: none; border-radius: 8px; }
     </style>
 </head>
 <body>
     <header>KAZ-HIGHWAY</header>
     <div class="container">
-        <button id="gps-btn" onclick="startLocalAnalysis()">SCANNING LIVE</button>
-        <div id="status-display">LOADED: DB READY</div>
-        <div id="timeline-container"></div>
+        <button id="gps-btn" onclick="analyze()">現在地をスキャン</button>
+        <div id="status-display">DB LOADING...</div>
+        <div id="timeline"></div>
     </div>
 
 <script>
     let joints = [];
     let facilities = [];
 
+    // 読み込み
     window.onload = async () => {
         try {
             const jRes = await fetch('./data/highway_joints.csv');
-            const jText = await jRes.text();
-            joints = Papa.parse(jText, {header:true, skipEmptyLines:true}).data;
-
+            joints = Papa.parse(await jRes.text(), {header:true, skipEmptyLines:true}).data;
             const fRes = await fetch('./data/highway_facilities_db.csv');
-            const fText = await fRes.text();
-            facilities = Papa.parse(fText, {header:true, skipEmptyLines:true}).data;
-            document.getElementById('status-display').innerText = "DB LOADED. READY.";
-        } catch (e) { document.getElementById('status-display').innerText = "DB ERROR: " + e.message; }
+            facilities = Papa.parse(await fText = await fRes.text(), {header:true, skipEmptyLines:true}).data;
+            document.getElementById('status-display').innerText = "DB READY.";
+        } catch(e) { document.getElementById('status-display').innerText = "LOAD ERROR: " + e; }
     };
 
-    function startLocalAnalysis() {
+    function analyze() {
         navigator.geolocation.getCurrentPosition(pos => {
-            const { latitude: lat, longitude: lon } = pos.coords;
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            
+            // 最近傍検索
             let nearest = null;
             let minDist = 9999;
-            
             joints.forEach(j => {
                 const dist = Math.hypot(parseFloat(j.lat) - lat, parseFloat(j.lon) - lon);
                 if(dist < minDist) { minDist = dist; nearest = j; }
             });
 
             if(nearest && minDist < 0.1) {
-                document.getElementById('status-display').innerText = `LOCKED: ${nearest.highway}`;
-                renderTimeline(nearest.highway);
+                const route = nearest.highway.trim();
+                document.getElementById('status-display').innerText = `LOCKED: ${route}`;
+                render(route);
             } else {
                 document.getElementById('status-display').innerText = "高速道路外です";
             }
         });
     }
 
-    function renderTimeline(routeName) {
-        const container = document.getElementById('timeline-container');
-        container.innerHTML = "";
+    function render(route) {
+        const timeline = document.getElementById('timeline');
+        timeline.innerHTML = "";
         
-        // 🔍 ここが重要！部分一致で検索して、表記ゆれを救う
-        const matches = facilities.filter(f => 
-            f.highway.includes(routeName) || routeName.includes(f.highway)
-        );
-
+        // 路線名が部分一致するものを抽出
+        const matches = facilities.filter(f => f.highway.trim() === route);
+        
         if(matches.length === 0) {
-            container.innerHTML = `<div style="color:red">ERROR: 路線名不一致 ${routeName}</div>`;
+            timeline.innerHTML = `<div style="color:red">路線名 "${route}" のデータなし。CSVの表記を確認して。</div>`;
             return;
         }
 
         matches.forEach(f => {
+            // アイコン生成ロジックを完全再現
             let icons = "";
-            if(f.gas_24h === "1") icons += "⛽";
-            if(f.conveni === "1") icons += "🏪";
-            if(f.shop === "1") icons += "🛍️";
+            if(f.gas_24h == "1") icons += "⛽";
+            if(f.conveni == "1") icons += "🏪";
+            if(f.restaurant == "1") icons += "🍽️";
             
-            container.innerHTML += `
+            timeline.innerHTML += `
                 <div class="sapa-card">
                     <div class="sapa-name">${f.name}</div>
-                    <div class="icon-box">${icons}</div>
+                    <div class="icons">${icons}</div>
                 </div>`;
         });
     }
