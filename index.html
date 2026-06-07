@@ -16,14 +16,17 @@
         .mode-btn.active { background: #0d2918; color: var(--nexco-light); border-color: var(--nexco-green); }
         #gps-btn { width: 100%; padding: 20px; background: linear-gradient(180deg, var(--nexco-light), var(--nexco-green)); color: #002210; font-size: 18px; font-weight: 900; border: none; border-radius: 12px; margin-bottom: 20px; cursor: pointer; box-shadow: 0 4px 15px rgba(0, 163, 79, 0.3); transition: all 0.1s; }
         #gps-btn:active { transform: scale(0.98); }
-        .timeline-wrapper { border-left: 3px solid var(--nexco-green); margin-left: 10px; padding-left: 20px; margin-top: 10px; }
+        
+        /* 🔥 タイムライン風のデザイン 🔥 */
+        .timeline-wrapper { border-left: 3px solid var(--nexco-green); margin-left: 10px; padding-left: 20px; margin-top: 20px; }
         .sapa-card { background: var(--panel-bg); padding: 16px; border-radius: 10px; margin-bottom: 16px; border: 1px solid #1f261f; position: relative; }
         .sapa-card::before { content: ''; position: absolute; left: -28px; top: 50%; transform: translateY(-50%); width: 13px; height: 13px; background-color: var(--nexco-light); border-radius: 50%; box-shadow: 0 0 8px var(--nexco-light); }
         .nav-label { font-size: 12px; color: var(--accent-gold); font-weight: bold; margin-bottom: 4px; letter-spacing: 1px; }
-        .card-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px;}
-        .sapa-name { font-size: 18px; font-weight: bold; }
+        .card-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px; }
+        .sapa-name { font-size: 18px; font-weight: bold; line-height: 1.2; }
         .distance-badge { background: #2a332a; color: var(--nexco-light); padding: 4px 8px; border-radius: 4px; font-size: 14px; font-weight: bold; border: 1px solid var(--nexco-green); }
-        .icons { font-size: 16px; letter-spacing: 2px; color: #aaa; margin-top: 5px; }
+        .icons { font-size: 16px; color: #aaa; margin-top: 5px; }
+        
         #status-display { text-align: center; color: var(--nexco-light); margin-bottom: 20px; font-size: 15px; font-weight: bold; min-height: 20px; }
         #test-panel { display: none; background: #2a0000; border: 1px solid var(--alert-red); padding: 15px; margin-bottom: 20px; color: #ff9999; border-radius: 8px; font-size: 12px; }
         #test-panel input { width: 80px; background: black; color: white; border: 1px solid red; margin: 0 5px; padding: 5px; }
@@ -66,12 +69,11 @@
         };
 
         function toggleDebug() { if(++clickCount >= 5) document.getElementById('test-panel').style.display = 'block'; }
-
-        function switchMode(mode) {
-            document.getElementById('drive-view').style.display = mode === 'drive' ? 'block' : 'none';
-            document.getElementById('db-view').style.display = mode === 'db' ? 'block' : 'none';
-            document.getElementById('mode-drive').classList.toggle('active', mode === 'drive');
-            document.getElementById('mode-db').classList.toggle('active', mode === 'db');
+        function switchMode(m) {
+            document.getElementById('drive-view').style.display = m === 'drive' ? 'block' : 'none';
+            document.getElementById('db-view').style.display = m === 'db' ? 'block' : 'none';
+            document.getElementById('mode-drive').classList.toggle('active', m === 'drive');
+            document.getElementById('mode-db').classList.toggle('active', m === 'db');
         }
 
         function startAnalysis() {
@@ -82,11 +84,8 @@
         function scanGPSLoop() {
             gpsScanCount++;
             document.getElementById('status-display').innerText = `AQUIRING GPS SIGNAL... [${gpsScanCount}/${MAX_GPS_SCANS}]`;
-            
             if(document.getElementById('test-panel').style.display === 'block') {
-                const baseLat = parseFloat(document.getElementById('test-lat').value) - (gpsScanCount * 0.005);
-                const baseLon = parseFloat(document.getElementById('test-lon').value) - (gpsScanCount * 0.005);
-                handleGPS({ coords: { latitude: baseLat, longitude: baseLon } });
+                handleGPS({ coords: { latitude: parseFloat(document.getElementById('test-lat').value) - (gpsScanCount * 0.005), longitude: parseFloat(document.getElementById('test-lon').value) - (gpsScanCount * 0.005) } });
             } else {
                 navigator.geolocation.getCurrentPosition(handleGPS, (e) => document.getElementById('status-display').innerText = "GPS Error: " + e.code, {enableHighAccuracy: true});
             }
@@ -116,11 +115,10 @@
             const container = document.getElementById('timeline-container');
             container.innerHTML = "";
             const wrapper = document.createElement('div'); wrapper.className = 'timeline-wrapper';
-            
             const matches = facilities.filter(f => f.highway && f.highway.trim() === route).map(f => ({
                 ...f, dist: Math.sqrt((parseFloat(f.lat)-lat)**2 + (parseFloat(f.lon)-lon)**2) * 111.0
             })).sort((a,b) => a.dist - b.dist).slice(0, 3);
-
+            
             matches.forEach((f, i) => {
                 let icons = "";
                 if(f.gas_24h == "1") icons += "⛽ ";
@@ -140,10 +138,9 @@
         }
 
         function renderSelectedRoute() {
-            const route = document.getElementById('route-select').value;
             const container = document.getElementById('db-timeline-container');
             container.innerHTML = "";
-            facilities.filter(f => f.highway && f.highway.trim() === route).forEach(f => {
+            facilities.filter(f => f.highway && f.highway.trim() === document.getElementById('route-select').value).forEach(f => {
                 container.innerHTML += `<div class="sapa-card" style="padding:12px;"><div class="sapa-name">${f.name}</div></div>`;
             });
         }
