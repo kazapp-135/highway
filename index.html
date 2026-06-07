@@ -1,81 +1,336 @@
-<style>
-    /* タイムラインの親要素：左側の縦線 */
-    .timeline-wrapper {
-        border-left: 3px solid var(--nexco-green);
-        margin-left: 15px;
-        padding-left: 20px;
-        margin-top: 20px;
-    }
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KAZ-HIGHWAY-NAVI</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;800;900&display=swap');
+        
+        :root { 
+            --bg-color: #080a08; 
+            --panel-bg: #121612; 
+            --nexco-green: #00A34F; 
+            --nexco-light: #1dd372; 
+            --nexco-dark: #006b33; 
+            --text-main: #E8EFE8; 
+            --text-sub: #7A857A; 
+            --alert-red: #E63946;
+            --accent-gold: #FFD700;
+        }
+        
+        body { 
+            background-color: var(--bg-color); color: var(--text-main); 
+            font-family: 'Orbitron', sans-serif; margin: 0; padding-bottom: 80px; 
+            user-select: none; -webkit-user-select: none;
+        }
+        
+        header { 
+            background: linear-gradient(135deg, var(--nexco-dark), var(--nexco-green)); 
+            text-align: center; padding: 20px; font-size: 22px; font-weight: 900; 
+            letter-spacing: 3px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .container { padding: 20px; max-width: 600px; margin: 0 auto; }
+        
+        .mode-switch { display: flex; gap: 10px; margin-bottom: 24px; }
+        .mode-btn { 
+            flex: 1; padding: 15px; background: var(--panel-bg); color: var(--text-sub); 
+            border: 1px solid #2a332a; border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer;
+        }
+        .mode-btn.active { background: #0d2918; color: var(--nexco-light); border-color: var(--nexco-green); }
+        
+        #gps-btn { 
+            width: 100%; padding: 20px; 
+            background: linear-gradient(180deg, var(--nexco-light), var(--nexco-green)); 
+            color: #002210; font-size: 18px; font-weight: 900; 
+            border: none; border-radius: 12px; margin-bottom: 20px; cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 163, 79, 0.3); transition: all 0.1s;
+        }
+        #gps-btn:active { transform: scale(0.98); }
+        
+        /* タイムラインナビデザイン */
+        .timeline-wrapper {
+            border-left: 3px solid var(--nexco-green);
+            margin-left: 10px; padding-left: 20px; margin-top: 10px;
+        }
+        .sapa-card { 
+            background: var(--panel-bg); padding: 16px; border-radius: 10px; 
+            margin-bottom: 16px; border: 1px solid #1f261f; position: relative;
+        }
+        .sapa-card::before {
+            content: ''; position: absolute; left: -28px; top: 50%; transform: translateY(-50%);
+            width: 13px; height: 13px; background-color: var(--nexco-light);
+            border-radius: 50%; box-shadow: 0 0 8px var(--nexco-light);
+        }
+        
+        .nav-label { 
+            font-size: 12px; color: var(--accent-gold); font-weight: bold; 
+            margin-bottom: 4px; letter-spacing: 1px;
+        }
+        
+        .card-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px;}
+        .sapa-name { font-size: 18px; font-weight: bold; line-height: 1.2; }
+        .distance-badge { 
+            background: #2a332a; color: var(--nexco-light); padding: 4px 8px; 
+            border-radius: 4px; font-size: 14px; font-weight: bold; border: 1px solid var(--nexco-green);
+        }
+        .icons { font-size: 16px; letter-spacing: 3px; color: #aaa;}
+        
+        #status-display { 
+            text-align: center; color: var(--nexco-light); margin-bottom: 20px; 
+            font-size: 15px; font-weight: bold; min-height: 20px;
+        }
+        
+        #test-panel { 
+            display: none; background: #2a0000; border: 1px solid var(--alert-red); 
+            padding: 15px; margin-bottom: 20px; color: #ff9999; border-radius: 8px; font-size: 12px;
+        }
+        #test-panel input { width: 80px; background: black; color: white; border: 1px solid red; margin: 0 5px; padding:5px;}
+        
+        select { 
+            width: 100%; padding: 15px; background: var(--panel-bg); 
+            color: white; border: 1px solid var(--nexco-green); border-radius: 8px; font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <header onclick="toggleDebug()">KAZ-HIGHWAY</header>
     
-    /* 各カードのスタイル */
-    .sapa-card { 
-        background: var(--panel-bg); 
-        padding: 16px; 
-        border-radius: 10px; 
-        margin-bottom: 20px; 
-        border: 1px solid #1f261f; 
-        position: relative;
-    }
-    
-    /* 縦線上の「丸ポチ」装飾 */
-    .sapa-card::before {
-        content: '';
-        position: absolute;
-        left: -29px;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 14px;
-        height: 14px;
-        background-color: var(--nexco-light);
-        border-radius: 50%;
-        box-shadow: 0 0 10px var(--nexco-light);
-    }
-    
-    .card-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px;}
-    .sapa-name { font-size: 18px; font-weight: bold; }
-    .distance-badge { color: var(--nexco-light); font-size: 14px; font-weight: bold; }
-    .icons { font-size: 16px; color: #888; }
-</style>
+    <div class="container">
+        <div id="test-panel">
+            <b style="font-size:14px;">[DEBUG] 海老名方面へ自動進行テスト</b><br><br>
+            開始 Lat: <input type="number" id="test-lat" value="35.4552">
+            Lon: <input type="number" id="test-lon" value="139.3939">
+        </div>
+
+        <div class="mode-switch">
+            <button class="mode-btn active" id="mode-drive" onclick="switchMode('drive')">助手席モード</button>
+            <button class="mode-btn" id="mode-db" onclick="switchMode('db')">路線図検索</button>
+        </div>
+
+        <div id="drive-view">
+            <button id="gps-btn" onclick="startAnalysis()">SCANNING LIVE ROUTE</button>
+            <div id="status-display">DB LOADING...</div>
+            <div id="timeline-container"></div>
+        </div>
+
+        <div id="db-view" style="display: none;">
+            <select id="route-select" onchange="renderSelectedRoute()"><option value="">▼ 路線図を選択</option></select>
+            <div id="db-timeline-container" style="margin-top:20px;"></div>
+        </div>
+    </div>
 
 <script>
-    // タイムライン表示用のレンダリング関数
+    let joints = [];
+    let facilities = [];
+    let clickCount = 0;
+    let gpsScanCount = 0;
+    const MAX_GPS_SCANS = 3;
+    let gpsHistory = []; // 方向計算のためのGPS履歴
+
+    window.onload = async () => {
+        try {
+            const jRes = await fetch('./data/highway_joints.csv');
+            joints = Papa.parse(await jRes.text(), {header:true, skipEmptyLines:true}).data;
+            const fRes = await fetch('./data/highway_facilities_db.csv');
+            facilities = Papa.parse(await fRes.text(), {header:true, skipEmptyLines:true}).data;
+            
+            const routes = [...new Set(facilities.map(f => f.highway ? f.highway.trim() : ""))].filter(Boolean);
+            const select = document.getElementById('route-select');
+            routes.forEach(r => select.innerHTML += `<option value="${r}">${r}</option>`);
+            
+            document.getElementById('status-display').innerText = "SYSTEM ONLINE. READY.";
+        } catch(e) { 
+            document.getElementById('status-display').innerText = "DB LOAD ERROR"; 
+            document.getElementById('status-display').style.color = "var(--alert-red)";
+        }
+    };
+
+    function switchMode(mode) {
+        document.getElementById('drive-view').style.display = mode === 'drive' ? 'block' : 'none';
+        document.getElementById('db-view').style.display = mode === 'db' ? 'block' : 'none';
+        document.getElementById('mode-drive').classList.toggle('active', mode === 'drive');
+        document.getElementById('mode-db').classList.toggle('active', mode === 'db');
+    }
+
+    function toggleDebug() { 
+        clickCount++;
+        if(clickCount >= 5) {
+            document.getElementById('test-panel').style.display = 'block'; 
+            document.getElementById('status-display').innerText = "DEBUG MODE ACTIVATED";
+        }
+    }
+
+    function startAnalysis() {
+        const status = document.getElementById('status-display');
+        document.getElementById('timeline-container').innerHTML = ""; 
+        gpsScanCount = 0;
+        gpsHistory = []; // 履歴リセット
+        status.style.color = "var(--nexco-light)";
+        scanGPSLoop();
+    }
+
+    // 擬似GPSまたは実機GPSを取得する関数
+    function getPosition(callback, errorCallback) {
+        if(document.getElementById('test-panel').style.display === 'block') {
+            // テストモード：海老名方面（南西）へ1スキャンごとに0.005度ずつ進むシミュレーション
+            const baseLat = parseFloat(document.getElementById('test-lat').value);
+            const baseLon = parseFloat(document.getElementById('test-lon').value);
+            const simLat = baseLat - (gpsScanCount * 0.005);
+            const simLon = baseLon - (gpsScanCount * 0.005);
+            callback({ coords: { latitude: simLat, longitude: simLon } });
+        } else {
+            if (!navigator.geolocation) return errorCallback({code: 0, message: "非対応"});
+            navigator.geolocation.getCurrentPosition(callback, errorCallback, { enableHighAccuracy: true, timeout: 10000 });
+        }
+    }
+
+    function scanGPSLoop() {
+        const status = document.getElementById('status-display');
+        gpsScanCount++;
+        status.innerText = `AQUIRING GPS SIGNAL... [${gpsScanCount}/${MAX_GPS_SCANS}]`;
+
+        getPosition(
+            (pos) => {
+                gpsHistory.push({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+                if (gpsScanCount < MAX_GPS_SCANS) {
+                    setTimeout(scanGPSLoop, 800);
+                } else {
+                    status.innerText = `SIGNAL ACQUIRED. CALCULATING...`;
+                    setTimeout(() => {
+                        calculateNearest(pos.coords.latitude, pos.coords.longitude);
+                    }, 500);
+                }
+            },
+            (err) => {
+                status.style.color = "var(--alert-red)";
+                status.innerText = "ERROR: GPS取得失敗 (" + err.code + ")";
+            }
+        );
+    }
+
+    function calculateNearest(currentLat, currentLon) {
+        let nearest = null;
+        let minDist = 9999;
+        
+        joints.forEach(j => {
+            if (!j.lat || !j.lon) return;
+            const dLat = parseFloat(j.lat) - currentLat;
+            const dLon = parseFloat(j.lon) - currentLon;
+            const dist = Math.sqrt(dLat*dLat + dLon*dLon) * 111.0; 
+            if(dist < minDist) { minDist = dist; nearest = j; }
+        });
+
+        const status = document.getElementById('status-display');
+        if(nearest && minDist <= 5.0) {
+            const routeName = nearest.highway.trim();
+            status.style.color = "var(--nexco-light)";
+            // 距離はそのまま残す
+            status.innerText = `LOCKED: ${routeName} (${minDist.toFixed(1)}km)`;
+            renderLiveTimeline(routeName, currentLat, currentLon);
+        } else {
+            status.style.color = "var(--alert-red)";
+            status.innerText = `高速道路外です (最寄り: ${minDist.toFixed(1)}km)`;
+        }
+    }
+
+    // 助手席モード用（進行方向から次の3つを計算して表示）
     function renderLiveTimeline(route, currentLat, currentLon) {
         const container = document.getElementById('timeline-container');
-        container.innerHTML = ""; // 一旦クリア
+        container.innerHTML = "";
         
-        // 路線でフィルタリング
         const matches = facilities.filter(f => f.highway && f.highway.trim() === route);
-        
-        // 縦線を入れるためのラッパー
-        const wrapper = document.createElement('div');
-        wrapper.className = 'timeline-wrapper';
+        if (matches.length === 0) return;
 
-        matches.forEach(f => {
+        // 1. 移動ベクトルを計算（最初の取得座標から現在の座標へのベクトル）
+        let moveLat = 0, moveLon = 0;
+        if(gpsHistory.length >= 2) {
+            moveLat = currentLat - gpsHistory[0].lat;
+            moveLon = currentLon - gpsHistory[0].lon;
+        }
+        
+        const isMoving = Math.abs(moveLat) > 0.0001 || Math.abs(moveLon) > 0.0001;
+
+        // 2. 各施設との距離と、進行方向にあるか（内積）を計算
+        let upcoming = matches.map(f => {
             const fLat = parseFloat(f.lat);
             const fLon = parseFloat(f.lon);
-            // 簡易距離計算
+            if (isNaN(fLat) || isNaN(fLon)) return null;
+
+            // 直線距離の計算
             const dist = Math.sqrt((fLat - currentLat)**2 + (fLon - currentLon)**2) * 111.0;
             
+            // 内積（移動ベクトル × 施設へのベクトル）で前方か後方か判定
+            let isAhead = true; 
+            if (isMoving) {
+                const dotProduct = (fLat - currentLat) * moveLat + (fLon - currentLon) * moveLon;
+                isAhead = dotProduct > 0; // 内積がプラスなら進行方向（前方）にある
+            }
+            return { ...f, dist, isAhead };
+        }).filter(f => f !== null);
+
+        // 前方にあるものだけに絞り、近い順に並び替え
+        let forwardFacilities = upcoming.filter(f => f.isAhead).sort((a,b) => a.dist - b.dist);
+
+        // ※もし全く動いていなくて方向がわからない場合は、単に近い順にする
+        if (!isMoving || forwardFacilities.length === 0) {
+            forwardFacilities = upcoming.sort((a,b) => a.dist - b.dist);
+        }
+
+        // 3. 上位3件（次、次の次、その次）だけを抽出
+        const nextThree = forwardFacilities.slice(0, 3);
+        const labels = ["次", "次の次", "次の次の次"];
+
+        const timelineWrapper = document.createElement('div');
+        timelineWrapper.className = 'timeline-wrapper';
+
+        nextThree.forEach((f, index) => {
             let icons = "";
             if(f.gas_24h == "1" || f.gas_24h == "true") icons += "⛽ ";
             if(f.conveni == "1" || f.conveni == "true") icons += "🏪 ";
             if(f.restaurant == "1" || f.restaurant == "true") icons += "🍽️ ";
+            if(f.hw_oasis == "1" || f.hw_oasis == "true") icons += "🎡 ";
             
-            // カードのHTML
-            const card = document.createElement('div');
-            card.className = 'sapa-card';
-            card.innerHTML = `
-                <div>
+            timelineWrapper.innerHTML += `
+                <div class="sapa-card">
+                    <div class="nav-label">▼ ${labels[index]}</div>
                     <div class="card-header">
                         <div class="sapa-name">${f.name}</div>
-                        <div class="distance-badge">あと ${dist.toFixed(1)} km</div>
+                        <div class="distance-badge">あと ${f.dist.toFixed(1)} km</div>
                     </div>
                     <div class="icons">${icons}</div>
-                </div>
-            `;
-            wrapper.appendChild(card);
+                </div>`;
         });
         
-        container.appendChild(wrapper);
+        container.appendChild(timelineWrapper);
+    }
+
+    // 路線図検索モード用（全件表示・距離なし）
+    function renderSelectedRoute() { 
+        const route = document.getElementById('route-select').value;
+        const container = document.getElementById('db-timeline-container');
+        container.innerHTML = "";
+        if(!route) return;
+
+        const matches = facilities.filter(f => f.highway && f.highway.trim() === route);
+        const timelineWrapper = document.createElement('div');
+        timelineWrapper.className = 'timeline-wrapper';
+
+        matches.forEach(f => {
+            let icons = "";
+            if(f.gas_24h == "1" || f.gas_24h == "true") icons += "⛽ ";
+            if(f.conveni == "1" || f.conveni == "true") icons += "🏪 ";
+            timelineWrapper.innerHTML += `
+                <div class="sapa-card" style="padding: 12px;">
+                    <div class="sapa-name" style="font-size:16px;">${f.name}</div>
+                    <div class="icons" style="font-size:14px;">${icons}</div>
+                </div>`;
+        });
+        container.appendChild(timelineWrapper);
     }
 </script>
+</body>
+</html>
